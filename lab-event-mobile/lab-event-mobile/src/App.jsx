@@ -26,6 +26,10 @@ function buildSubdomain(s) {
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
   const url = `${PROXY}/api/proxy?path=${encodeURIComponent(path)}`;
+  // Inject per_page for POST analytics calls to bypass default pagination limit
+  const enrichedBody = method === 'POST' && body !== undefined
+    ? { per_page: 2000, ...body }
+    : body;
   const res = await fetch(url, {
     method,
     headers: {
@@ -34,7 +38,7 @@ async function api(subdomain, token, path, { method='GET', body }={}) {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: enrichedBody ? JSON.stringify(enrichedBody) : undefined,
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok) throw new Error(data?.error || data?.message || `${res.status}`);
