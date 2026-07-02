@@ -58,6 +58,22 @@ const date  = d => { if(!d) return '—'; try { return new Intl.DateTimeFormat('
 const strip = h => h ? h.replace(/<[^>]*>/g,'').trim() : '';
 
 // ─── Shared Components ───────────────────────────────────────────
+function SearchBar({value, onChange, placeholder}) {
+  return <div style={{position:'relative',marginBottom:12}}>
+    <svg style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input
+      value={value}
+      onChange={e=>onChange(e.target.value)}
+      placeholder={placeholder||'Rechercher…'}
+      style={{width:'100%',height:40,padding:'0 36px 0 36px',border:`1px solid ${T.border}`,borderRadius:9,fontSize:13.5,color:T.ink,outline:'none',background:T.surface,boxSizing:'border-box'}}
+    />
+    {value&&<button onClick={()=>onChange('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center'}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>}
+  </div>;
+}
 function Card({children,style,onClick}) {
   return <div onClick={onClick} style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,boxShadow:'0 1px 3px rgba(16,24,40,0.06)',cursor:onClick?'pointer':'default',...style}}>{children}</div>;
 }
@@ -248,6 +264,7 @@ function Events({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
+  const [search,setSearch]=useState('');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -260,13 +277,21 @@ function Events({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
+  const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
+  const filtered=q?sorted.filter(e=>
+    (e.event_name||'').toLowerCase().includes(q)||
+    (e.customer||'').toLowerCase().includes(q)||
+    (e.status_name||'').toLowerCase().includes(q)||
+    (e.place||'').toLowerCase().includes(q)
+  ):sorted;
 
   return <div style={{padding:16}}>
-    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 12px'}}>Événements ({sorted.length})</h2>
-    {sorted.length===0?<Empty icon={Calendar} msg="Aucun événement."/>:
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, client, lieu…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucun événement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>setSelected(ev)}/>)}
+        {filtered.map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>setSelected(ev)}/>)}
       </div>}
   </div>;
 }
@@ -276,6 +301,8 @@ function Planning({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+
+  const [search,setSearch]=useState('');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -287,11 +314,18 @@ function Planning({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
+  const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0));
+  const filtered=q?sorted.filter(i=>
+    (i.event_name||'').toLowerCase().includes(q)||
+    (i.room_name||'').toLowerCase().includes(q)||
+    (i.status_name||'').toLowerCase().includes(q)
+  ):sorted;
 
   return <div style={{padding:16}}>
-    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 12px'}}>Planning salles</h2>
-    {sorted.length===0?<Empty icon={Calendar} msg="Aucune réservation planifiée."/>:
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, salle…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} réservation{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucune réservation planifiée."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {sorted.map((item,i)=><Card key={item.schedule_id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
@@ -327,13 +361,24 @@ function Quotes({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
+  const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0));
+  const filtered=q?sorted.filter(d=>
+    (d.title||'').toLowerCase().includes(q)||
+    (d.event||'').toLowerCase().includes(q)||
+    (d.nb||'').toLowerCase().includes(q)||
+    (d.customer||'').toLowerCase().includes(q)||
+    (d.status||'').toLowerCase().includes(q)
+  ):sorted;
   return <div style={{padding:16}}>
-    {sorted.length===0?<Empty icon={FileText} msg="Aucun devis."/>:
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{q?` sur ${sorted.length}`:''}</div>
+    {filtered.length===0?<Empty icon={FileText} msg={q?"Aucun résultat.":"Aucun devis."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {sorted.map((q,i)=><Card key={q.quote_id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
@@ -355,13 +400,24 @@ function Bills({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
+  const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  const filtered=q?sorted.filter(b=>
+    (b.event||'').toLowerCase().includes(q)||
+    (b.customer||'').toLowerCase().includes(q)||
+    (b.nb||'').toLowerCase().includes(q)||
+    (b.contact_name||'').toLowerCase().includes(q)||
+    (b.status||'').toLowerCase().includes(q)
+  ):sorted;
   return <div style={{padding:16}}>
-    {sorted.length===0?<Empty icon={Receipt} msg="Aucune facture."/>:
+    <SearchBar value={search} onChange={setSearch} placeholder="Événement, client, numéro…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    {filtered.length===0?<Empty icon={Receipt} msg={q?"Aucun résultat.":"Aucune facture."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {sorted.map((b,i)=><Card key={b.bill_id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
@@ -384,13 +440,22 @@ function Payments({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
+  const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.prepayment_date||0)-new Date(a.prepayment_date||0));
+  const filtered=q?sorted.filter(p=>
+    (p.bill_number||'').toLowerCase().includes(q)||
+    (p.payment_type||'').toLowerCase().includes(q)||
+    (p.prepayment_info||'').toLowerCase().includes(q)
+  ):sorted;
   return <div style={{padding:16}}>
-    {sorted.length===0?<Empty icon={CreditCard} msg="Aucun paiement."/>:
+    <SearchBar value={search} onChange={setSearch} placeholder="N° facture, mode de paiement…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} paiement{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    {filtered.length===0?<Empty icon={CreditCard} msg={q?"Aucun résultat.":"Aucun paiement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {sorted.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
@@ -415,6 +480,7 @@ function Activites({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [filter,setFilter]=useState('all');
+  const [search,setSearch]=useState('');
 
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
@@ -424,19 +490,29 @@ function Activites({session}) {
   const all=items||[];
   const expired=all.filter(a=>a.deadline_is_expired);
   const soon=all.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
-  const normal=all.filter(a=>!a.deadline_is_expired&&!a.deadline_is_soon_expired);
 
-  const filtered=filter==='expired'?expired:filter==='soon'?soon:all;
+  const q=search.toLowerCase();
+  const byFilter=filter==='expired'?expired:filter==='soon'?soon:all;
+  const filtered=q?byFilter.filter(a=>
+    (a.corporation_client_name||'').toLowerCase().includes(q)||
+    (a.client_contact_name||'').toLowerCase().includes(q)||
+    (a.event_name||'').toLowerCase().includes(q)||
+    (a.type||'').toLowerCase().includes(q)||
+    (a.category||'').toLowerCase().includes(q)||
+    (a.comment||'').toLowerCase().includes(q)
+  ):byFilter;
   const filters=[{k:'all',label:`Toutes (${all.length})`},{k:'expired',label:`En retard (${expired.length})`},{k:'soon',label:`Bientôt (${soon.length})`}];
 
   return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Client, contact, événement, type…"/>
     {expired.length>0&&<div style={{display:'flex',alignItems:'center',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12.5,color:T.danger}}>
       <AlertTriangle size={15}/><span>{expired.length} activité{expired.length>1?'s':''} en retard</span>
     </div>}
-    <div style={{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}}>
+    <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
       {filters.map(f=><button key={f.k} onClick={()=>setFilter(f.k)} style={{padding:'5px 12px',borderRadius:999,border:`1px solid ${filter===f.k?T.brand:T.border}`,background:filter===f.k?T.brandTint:'none',color:filter===f.k?T.brand:T.textMuted,fontSize:12,fontWeight:filter===f.k?600:400,cursor:'pointer'}}>{f.label}</button>)}
     </div>
-    {filtered.length===0?<Empty icon={Activity} msg="Aucune activité."/>:
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} activité{filtered.length>1?'s':''}{q?` sur ${byFilter.length}`:''}</div>
+    {filtered.length===0?<Empty icon={Activity} msg={q?"Aucun résultat.":"Aucune activité."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((a,i)=>{
           const isExp=a.deadline_is_expired;
@@ -474,6 +550,7 @@ function Contacts({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [sub,setSub]=useState('companies');
+  const [search,setSearch]=useState('');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -491,16 +568,24 @@ function Contacts({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const tabs=[{k:'companies',label:`Sociétés (${(companies||[]).length})`},{k:'contacts',label:`Contacts (${(customers||[]).length})`}];
+  const q=search.toLowerCase();
+  const allCo=companies||[];
+  const allCu=customers||[];
+  const filteredCo=q?allCo.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.city||'').toLowerCase().includes(q)):allCo;
+  const filteredCu=q?allCu.filter(c=>[c.name,c.last_name,c.email,c.position].filter(Boolean).join(' ').toLowerCase().includes(q)):allCu;
+
+  const tabs=[{k:'companies',label:`Sociétés (${allCo.length})`},{k:'contacts',label:`Contacts (${allCu.length})`}];
 
   return <div>
     <div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setSub(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
     </div>
     <div style={{padding:16}}>
-      {sub==='companies'&&((companies||[]).length===0?<Empty icon={Building2} msg="Aucune société."/>:
+      <SearchBar value={search} onChange={v=>{setSearch(v);}} placeholder={sub==='companies'?"Nom société, ville…":"Nom, email, poste…"}/>
+      {sub==='companies'&&(filteredCo.length===0?<Empty icon={Building2} msg={q?"Aucun résultat.":"Aucune société."}/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {(companies||[]).map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:4}}>{filteredCo.length} société{filteredCo.length>1?'s':''}{q?` sur ${allCo.length}`:''}</div>
+          {filteredCo.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Building2 size={16} color={T.brand}/></div>
               <div style={{minWidth:0,flex:1}}>
@@ -510,9 +595,10 @@ function Contacts({session}) {
             </div>
           </Card>)}
         </div>)}
-      {sub==='contacts'&&((customers||[]).length===0?<Empty icon={UserRound} msg="Aucun contact."/>:
+      {sub==='contacts'&&(filteredCu.length===0?<Empty icon={UserRound} msg={q?"Aucun résultat.":"Aucun contact."}/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {(customers||[]).map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:4}}>{filteredCu.length} contact{filteredCu.length>1?'s':''}{q?` sur ${allCu.length}`:''}</div>
+          {filteredCu.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
               <div style={{minWidth:0,flex:1}}>
