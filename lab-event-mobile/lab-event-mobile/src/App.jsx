@@ -125,6 +125,18 @@ function dateJ2Ans() {
 const money = n => n==null||isNaN(n)?'—':new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const date  = d => { if(!d) return '—'; try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(d)); } catch{return d;} };
 const strip = h => h ? h.replace(/<[^>]*>/g,'').trim() : '';
+const formatVAT = v => {
+  if (!v || typeof v !== 'object') return safeStr(v)||'—';
+  return Object.entries(v).filter(([k,val])=>val&&val!=='').map(([k,val])=>`${k}% : ${money(val)}`).join(' · ')||'—';
+};
+const formatEventState = s => {
+  if (!s || /^\d+$/.test(String(s))) return null; // hide numeric IDs
+  return s;
+};
+const dateTime = d => {
+  if (!d) return '—';
+  try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(d)); } catch { return d; }
+};
 
 // ─── Shared Components ───────────────────────────────────────────
 function SearchBar({value, onChange, placeholder}) {
@@ -257,19 +269,31 @@ function Dashboard({session,onEventClick}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const now=new Date();
-  const upcoming=(events||[]).filter(e=>e.events_date_from&&new Date(e.events_date_from)>=now);
+  const thisMonth=new Date(now.getFullYear(),now.getMonth(),1);
+  const upcoming=(events||[]).filter(e=>e.events_date_from&&new Date(e.events_date_from)>=now).sort((a,b)=>new Date(a.events_date_from)-new Date(b.events_date_from));
   const pending=(quotes||[]).filter(q=>!/sign|annul|rejet/i.test(q.status||''));
   const totalSigned=(events||[]).reduce((s,e)=>s+(Number(e.quotes_sell_price_sign)||0),0);
   const won=(events||[]).filter(e=>e.win_lost==='Gagné').length;
+  const lost=(events||[]).filter(e=>e.win_lost==='Perdu').length;
+  const inProgress=(events||[]).filter(e=>!e.win_lost||e.win_lost==='En cours').length;
+  const signedThisMonth=(quotes||[]).filter(q=>q.date_of_quote&&new Date(q.date_of_quote)>=thisMonth&&/sign/i.test(q.status||''));
+  const caThisMonth=signedThisMonth.reduce((s,q)=>s+(Number(q.ttc)||0),0);
 
   return <div style={{padding:16}}>
-    <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
-      <StatCard icon={Calendar} label="Événements à venir" value={upcoming.length} accent={T.brand}/>
-      <StatCard icon={FileText} label="Devis en attente" value={pending.length} accent={T.warning}/>
-      <StatCard icon={Euro} label="CA signé" value={money(totalSigned)} accent={T.success}/>
-      <StatCard icon={TrendingUp} label="Gagnés" value={won} accent={T.info}/>
+    <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+      <StatCard icon={Calendar} label="À venir" value={upcoming.length} accent={T.brand}/>
+      <StatCard icon={FileText} label="Devis en cours" value={pending.length} accent={T.warning}/>
+      <StatCard icon={Euro} label="CA signé total" value={money(totalSigned)} accent={T.success}/>
+      <StatCard icon={Euro} label="CA ce mois" value={money(caThisMonth)} accent={T.info}/>
     </div>
-    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'20px 0 10px'}}>Prochains événements</h2>
+    {/* Pipeline */}
+    <div style={{display:'flex',gap:8,marginBottom:16}}>
+      {[{label:'En cours',val:inProgress,color:T.info},{label:'Gagnés',val:won,color:T.success},{label:'Perdus',val:lost,color:T.danger}].map(p=><div key={p.label} style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 8px',textAlign:'center'}}>
+        <div style={{fontSize:18,fontWeight:700,color:p.color}}>{p.val}</div>
+        <div style={{fontSize:11,color:T.textMuted}}>{p.label}</div>
+      </div>)}
+    </div>
+    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'16px 0 10px'}}>Prochains événements</h2>
     {upcoming.length===0?<Empty icon={Calendar} msg="Aucun événement à venir."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {upcoming.slice(0,5).map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>onEventClick(ev)}/>)}
@@ -278,16 +302,20 @@ function Dashboard({session,onEventClick}) {
 }
 
 function EventRow({event,onClick}) {
+  const wl=event.win_lost;
+  const wlColor=wl==='Gagné'?T.success:wl==='Perdu'?T.danger:wl==='En cours'?T.info:T.warning;
   return <Card onClick={onClick} style={{padding:14,display:'flex',alignItems:'center',gap:12}}>
     <div style={{width:40,height:40,borderRadius:10,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
       <Calendar size={18} color={T.brand} strokeWidth={2.2}/>
     </div>
     <div style={{flex:1,minWidth:0}}>
       <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.event_name||'Événement sans nom'}</div>
-      <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:10,flexWrap:'wrap'}}>
-        <span style={{display:'flex',alignItems:'center',gap:4}}><Clock size={11}/>{date(event.events_date_from)}</span>
-        {event.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:4}}><Users size={11}/>{event.number_of_persons}</span>:null}
-        {event.win_lost?<Badge label={event.win_lost} color={event.win_lost==='Gagné'?T.success:event.win_lost==='Perdu'?T.danger:T.warning}/>:null}
+      {event.customer&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.customer}</div>}
+      <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{date(event.events_date_from)}</span>
+        {event.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{event.number_of_persons}</span>:null}
+        {event.quotes_sell_price_sign?<span style={{color:T.success,fontWeight:600}}>{money(event.quotes_sell_price_sign)}</span>:null}
+        {wl?<Badge label={wl} color={wlColor}/>:null}
       </div>
     </div>
     <ChevronRight size={16} color={T.textSubtle}/>
@@ -296,19 +324,20 @@ function EventRow({event,onClick}) {
 
 // ─── Event Detail ────────────────────────────────────────────────
 function EventDetail({event,onBack}) {
+  const wl=event.win_lost;
+  const wlColor=wl==='Gagné'?T.success:wl==='Perdu'?T.danger:T.warning;
   const fields=[
     {label:'Date début',value:date(event.events_date_from)},
     {label:'Date fin',value:date(event.events_date_to)},
-    {label:'Personnes',value:event.number_of_persons||'—'},
-    {label:'Client',value:event.customer||'—'},
-    {label:'Commercial',value:event.member||'—'},
-    {label:'Statut',value:event.status_name||'—'},
-    {label:'CA signé (TTC)',value:money(event.quotes_sell_price_sign)},
-    {label:'CA devis (TTC)',value:money(event.quotes_sell_price)},
-    {label:'Résultat',value:event.win_lost||'—'},
-    {label:'Lieu',value:event.place||'—'},
-    {label:'Type',value:event.event_type||'—'},
-  ];
+    {label:'Personnes',value:event.number_of_persons},
+    {label:'Client',value:event.customer},
+    {label:'Commercial',value:event.member||event.owner},
+    {label:'Résultat',value:event.win_lost},
+    {label:'Lieu',value:event.place},
+    {label:'Type',value:event.event_type},
+    {label:'Source',value:event.source},
+    {label:'Code',value:event.incremental_code},
+  ].filter(f=>f.value);
 
   return <div>
     <div style={{display:'flex',alignItems:'center',gap:12,padding:'16px 16px 8px'}}>
@@ -317,12 +346,26 @@ function EventDetail({event,onBack}) {
       </button>
     </div>
     <div style={{padding:'0 16px 16px'}}>
-      <h1 style={{fontSize:18,fontWeight:700,color:T.ink,margin:'0 0 4px'}}>{event.event_name||'Événement'}</h1>
-      {event.status_name&&<Badge label={event.status_name} color={T.brand}/>}
-      <Card style={{marginTop:16}}>
-        {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+      <h1 style={{fontSize:17,fontWeight:700,color:T.ink,margin:'0 0 6px'}}>{event.event_name||'Événement'}</h1>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+        {event.status_name&&<Badge label={event.status_name} color={T.brand}/>}
+        {wl&&<Badge label={wl} color={wlColor}/>}
+      </div>
+      {/* CA Cards */}
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+        {[
+          {label:'CA signé TTC',value:money(event.quotes_sell_price_sign),accent:T.success},
+          {label:'CA total TTC',value:money(event.quotes_sell_price),accent:T.brand},
+          {label:'Marge',value:money(event.total_marge),accent:T.info},
+        ].filter(f=>f.value!=='—').map((f,i)=><div key={i} style={{flex:1,minWidth:90,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted,marginBottom:2}}>{f.label}</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:f.accent}}>{f.value}</div>
+        </div>)}
+      </div>
+      <Card>
+        {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
-          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>
         </div>)}
       </Card>
     </div>
@@ -348,18 +391,23 @@ function Events({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
+  const [pipeline,setPipeline]=useState('');
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
-  const filtered=q?sorted.filter(e=>
-    (e.event_name||'').toLowerCase().includes(q)||
-    (e.customer||'').toLowerCase().includes(q)||
-    (e.status_name||'').toLowerCase().includes(q)||
-    (e.place||'').toLowerCase().includes(q)
-  ):sorted;
+  const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
+  const filtered=sorted.filter(e=>{
+    const mQ=!q||(e.event_name||'').toLowerCase().includes(q)||(e.customer||'').toLowerCase().includes(q)||(e.status_name||'').toLowerCase().includes(q)||(e.place||'').toLowerCase().includes(q);
+    const mP=!pipeline||e.win_lost===pipeline;
+    return mQ&&mP;
+  });
 
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, client, lieu…"/>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    {pipelines.length>0&&<div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+      <button onClick={()=>setPipeline('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!pipeline?T.brand:T.border}`,background:!pipeline?T.brandTint:'none',color:!pipeline?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!pipeline?600:400}}>Tous</button>
+      {pipelines.map(p=><button key={p} onClick={()=>setPipeline(p===pipeline?'':p)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${pipeline===p?T.brand:T.border}`,background:pipeline===p?T.brandTint:'none',color:pipeline===p?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:pipeline===p?600:400}}>{p}</button>)}
+    </div>}
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{(q||pipeline)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucun événement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>setSelected(ev)}/>)}
@@ -398,18 +446,29 @@ function Planning({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} réservation{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucune réservation planifiée."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((item,i)=><Card key={item.schedule_id||i} style={{padding:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{item.event_name||'Sans nom'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:4,display:'flex',gap:10,flexWrap:'wrap'}}>
-                <span style={{display:'flex',alignItems:'center',gap:4}}><Clock size={11}/>{date(item.start_at)}</span>
-                {item.room_name&&<span style={{display:'flex',alignItems:'center',gap:4}}><MapPin size={11}/>{item.room_name}</span>}
+        {sorted.map((item,i)=>{
+          const room=item.product_real_name||item.room_name||item.name;
+          const client=[item.customer_name,item.customer_last_name].filter(Boolean).join(' ')||item.company_name;
+          const timeStr=item.start_at&&item.end_at?`${dateTime(item.start_at).split(' ').slice(1).join(' ')} → ${dateTime(item.end_at).split(' ').slice(1).join(' ')}`:date(item.start_at);
+          return <Card key={item.schedule_id||i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.event_name||'Sans nom'}</div>
+                {client&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1}}>{client}</div>}
+                <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                  {date(item.event_date_from||item.start_at)&&<span style={{display:'flex',alignItems:'center',gap:3}}><Calendar size={11}/>{date(item.event_date_from||item.start_at)}</span>}
+                  {item.start_at&&<span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{item.start_at.substring(11,16)} → {(item.end_at||'').substring(11,16)}</span>}
+                  {room&&<span style={{display:'flex',alignItems:'center',gap:3}}><MapPin size={11}/>{room}</span>}
+                  {item.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{item.number_of_persons}</span>:null}
+                </div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end',flexShrink:0}}>
+                {item.status_name&&<Badge label={item.status_name} color={item.status_color||T.brand}/>}
+                {item.total_goods?<span style={{fontSize:10.5,color:T.textMuted}}>{item.total_goods} prestation{item.total_goods>1?'s':''}</span>:null}
               </div>
             </div>
-            {item.status_name&&<Badge label={item.status_name} color={item.status_color||T.brand}/>}
-          </div>
-        </Card>)}
+          </Card>;
+        })}
       </div>}
   </div>;
 }
@@ -467,11 +526,11 @@ function QuoteDetail({quote:q, session, onBack}) {
     {label:'Date événement', value:date(q.date_of_event)},
     {label:'Client', value:safeStr(q.customer)},
     {label:'Événement', value:safeStr(q.event)},
-    {label:'Statut événement', value:safeStr(q.event_state)},
+    {label:'Statut événement', value:formatEventState(q.event_state)&&safeStr(q.event_state)},
     {label:'Commercial', value:safeStr(q.owner||q.member)},
     {label:'Chef de projet', value:safeStr(q.pm)},
     {label:'Prestation principale', value:safeStr(q.main_product)},
-    {label:'TVA', value:safeStr(q.vat_rates)},
+    {label:'TVA', value:formatVAT(q.vat_rates)},
   ].filter(f=>f.value);
 
   return <div>
@@ -525,10 +584,17 @@ function QuoteDetail({quote:q, session, onBack}) {
 
       {/* Sections brutes si pas de lignes analytics */}
       {!loadingLines&&(!lines||lines.length===0)&&sections.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
-        {sections.map((s,i)=><Card key={i} style={{padding:12}}>
-          <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{safeStr(s.name||s.title||s.goods_section||`Section ${i+1}`)}</div>
-          {s.total_ht&&<div style={{fontSize:12,color:T.textMuted}}>HT : {money(s.total_ht)}</div>}
-          {s.total_ttc&&<div style={{fontSize:12,color:T.brand,fontWeight:600}}>TTC : {money(s.total_ttc)}</div>}
+        {sections.filter(s=>s.sellPrice||s.price).map((s,i)=><Card key={i} style={{padding:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{fontSize:13,fontWeight:600,color:T.ink}}>
+              {safeStr(s.name||s.title||s.goods_section||s.col_1||`Section ${i+1}`)}
+              {s.col_2&&s.col_2!==s.col_1&&<span style={{fontSize:11.5,color:T.textMuted,fontWeight:400,marginLeft:6}}>{safeStr(s.col_2)}</span>}
+            </div>
+            <div style={{textAlign:'right',flexShrink:0}}>
+              {s.sellPrice&&<div style={{fontSize:13.5,fontWeight:700,color:T.brand}}>{money(s.sellPrice)}</div>}
+              {s.price&&Number(s.price)!==Number(s.sellPrice)&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(s.price)}</div>}
+            </div>
+          </div>
         </Card>)}
       </div>}
 
@@ -850,6 +916,10 @@ function Activites({session}) {
                 {a.client_contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{a.client_contact_name}{a.client_contact_email?` · ${a.client_contact_email}`:''}</div>}
                 {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4,marginTop:2}}><Calendar size={11}/>{a.event_name}</div>}
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:6,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:8}}>{strip(a.comment).slice(0,120)}{strip(a.comment).length>120?'…':''}</div>}
+                {(a.event_link||a.corporation_client_link)&&<div style={{display:'flex',gap:6,marginTop:6}}>
+                  {a.event_link&&<a href={a.event_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,color:T.brand,textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px'}}>Voir événement</a>}
+                  {a.corporation_client_link&&<a href={a.corporation_client_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,color:T.secondary,textDecoration:'none',border:`1px solid ${T.secondary}`,borderRadius:6,padding:'3px 8px'}}>Voir client</a>}
+                </div>}
                 <div style={{display:'flex',gap:10,marginTop:6,fontSize:11,color:T.textSubtle,flexWrap:'wrap'}}>
                   {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
                   {a.deadline&&<span style={{color:isExp?T.danger:isSoon?T.warning:T.textSubtle}}>{isExp?'⚠ ':isSoon?'⏰ ':''}Échéance : {date(a.deadline)}</span>}
@@ -1287,9 +1357,8 @@ export default function App() {
   const [eventDetail,setEventDetail]=useState(null);
   const [drawerOpen,setDrawerOpen]=useState(false);
 
-  const handleLogin = s => {
-    try { localStorage.setItem('le_session', JSON.stringify(s)); } catch {}
-    setSession(s);
+  // Helper to prefetch all data for a session
+  const prefetchAll = s => {
     const endpoints = [
       {path:'/v3/analytics/events', opts:{method:'POST',body:{events_date_from:dateJ2Ans()}}},
       {path:'/v3/analytics/finance-documents/quotes', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
@@ -1299,10 +1368,21 @@ export default function App() {
       {path:'/v3/analytics/partner-companies', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
       {path:'/v3/analytics/finance-documents/rentability', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
       {path:'/v3/analytics/finance-documents/vue-analytics-light', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/goods', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/events/vue-planning', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/events/vue-planning-by-day', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
     ];
     endpoints.forEach(({path,opts})=>apiCached(s.subdomain,s.token,path,opts).catch(()=>{}));
     fetchAllPagesCached(s.subdomain,s.token,'/v3/customer-company').catch(()=>{});
     fetchAllPagesCached(s.subdomain,s.token,'/v3/customers').catch(()=>{});
+  };
+
+  // Prefetch on session restore (page reload)
+  useEffect(()=>{ if(session) prefetchAll(session); },[]);
+
+  const handleLogin = s => {
+    try { localStorage.setItem('le_session', JSON.stringify(s)); } catch {}
+    setSession(s);
   };
 
   const handleLogout = () => {
