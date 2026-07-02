@@ -543,6 +543,86 @@ function Activites({session}) {
   </div>;
 }
 
+// ─── Fetch all pages helper ───────────────────────────────────────
+async function fetchAllPages(subdomain, token, basePath) {
+  let page = 1;
+  let allData = [];
+  let lastPage = 1;
+  do {
+    const sep = basePath.includes('?') ? '&' : '?';
+    const res = await api(subdomain, token, `${basePath}${sep}per_page=100&page=${page}`);
+    const items = Array.isArray(res) ? res : (res?.data || []);
+    allData = [...allData, ...items];
+    lastPage = res?.meta?.last_page || 1;
+    page++;
+  } while (page <= lastPage);
+  return allData;
+}
+
+// ─── Company Detail ───────────────────────────────────────────────
+function CompanyDetail({company, allCustomers, onBack}) {
+  const linked = allCustomers.filter(c =>
+    c.company?.id === company.id ||
+    c.company?.name?.toLowerCase() === (company.name||'').toLowerCase()
+  );
+
+  return <div>
+    <div style={{padding:'16px 16px 8px'}}>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
+        <ChevronLeft size={18}/> Retour
+      </button>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+        <div style={{width:48,height:48,borderRadius:12,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <Building2 size={22} color={T.brand}/>
+        </div>
+        <div>
+          <h1 style={{fontSize:17,fontWeight:700,color:T.ink,margin:0}}>{company.name||'Société'}</h1>
+          {company.city&&<div style={{fontSize:13,color:T.textMuted}}>{company.city}{company.country?`, ${company.country}`:''}</div>}
+        </div>
+      </div>
+
+      <Card style={{marginBottom:16}}>
+        {[
+          {label:'Ville', value:company.city},
+          {label:'Pays', value:company.country},
+          {label:'Code postal', value:company.data?.postal_code},
+          {label:'SIRET', value:company.data?.nb_siret},
+          {label:'N° TVA', value:company.data?.tva_number},
+          {label:'Service', value:company.data?.service},
+        ].filter(f=>f.value).map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          <span style={{fontSize:13,color:T.textMuted}}>{f.label}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+        </div>)}
+      </Card>
+
+      <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 10px'}}>
+        Contacts liés ({linked.length})
+      </h2>
+      {linked.length===0
+        ? <Empty icon={UserRound} msg="Aucun contact lié à cette société."/>
+        : <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {linked.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+              <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <UserRound size={16} color={T.info}/>
+                </div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{[c.civility,c.name,c.last_name].filter(Boolean).join(' ')||'Sans nom'}</div>
+                  {c.position&&<div style={{fontSize:12,color:T.textMuted}}>{c.position}</div>}
+                  <div style={{display:'flex',gap:10,marginTop:4,flexWrap:'wrap'}}>
+                    {c.email&&<a href={`mailto:${c.email}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Mail size={11}/>{c.email}</a>}
+                    {(c.mobile||c.phone)&&<a href={`tel:${c.mobile||c.phone}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Phone size={11}/>{c.mobile||c.phone}</a>}
+                  </div>
+                </div>
+              </div>
+            </Card>)}
+          </div>}
+    </div>
+  </div>;
+}
+
 // ─── Contacts ────────────────────────────────────────────────────
 function Contacts({session}) {
   const [companies,setCompanies]=useState(null);
@@ -551,22 +631,25 @@ function Contacts({session}) {
   const [loading,setLoading]=useState(true);
   const [sub,setSub]=useState('companies');
   const [search,setSearch]=useState('');
+  const [selectedCompany,setSelectedCompany]=useState(null);
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
     try{
       const [co,cu]=await Promise.all([
-        api(session.subdomain,session.token,'/v3/customer-company'),
-        api(session.subdomain,session.token,'/v3/customers'),
+        fetchAllPages(session.subdomain,session.token,'/v3/customer-company'),
+        fetchAllPages(session.subdomain,session.token,'/v3/customers'),
       ]);
-      setCompanies(Array.isArray(co)?co:co?.data||[]);
-      setCustomers(Array.isArray(cu)?cu:cu?.data||[]);
+      setCompanies(co);
+      setCustomers(cu);
     } catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
 
-  if(loading) return <Spinner/>;
+  if(loading) return <div style={{padding:16}}><Spinner/><p style={{textAlign:'center',fontSize:12,color:T.textMuted}}>Chargement de tous les contacts…</p></div>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} onBack={()=>setSelectedCompany(null)}/>;
 
   const q=search.toLowerCase();
   const allCo=companies||[];
@@ -578,40 +661,46 @@ function Contacts({session}) {
 
   return <div>
     <div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
-      {tabs.map(t=><button key={t.k} onClick={()=>setSub(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
+      {tabs.map(t=><button key={t.k} onClick={()=>{setSub(t.k);setSearch('');}} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
     </div>
     <div style={{padding:16}}>
-      <SearchBar value={search} onChange={v=>{setSearch(v);}} placeholder={sub==='companies'?"Nom société, ville…":"Nom, email, poste…"}/>
-      {sub==='companies'&&(filteredCo.length===0?<Empty icon={Building2} msg={q?"Aucun résultat.":"Aucune société."}/>:
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          <div style={{fontSize:12,color:T.textMuted,marginBottom:4}}>{filteredCo.length} société{filteredCo.length>1?'s':''}{q?` sur ${allCo.length}`:''}</div>
-          {filteredCo.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
-            <div style={{display:'flex',alignItems:'center',gap:12}}>
-              <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Building2 size={16} color={T.brand}/></div>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.name||'Sans nom'}</div>
-                {c.city&&<div style={{fontSize:12,color:T.textMuted}}>{c.city}{c.country?`, ${c.country}`:''}</div>}
+      <SearchBar value={search} onChange={setSearch} placeholder={sub==='companies'?'Nom société, ville…':'Nom, email, poste…'}/>
+      {sub==='companies'&&<>
+        <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filteredCo.length} société{filteredCo.length>1?'s':''}{q?` sur ${allCo.length}`:''}</div>
+        {filteredCo.length===0?<Empty icon={Building2} msg={q?'Aucun résultat.':'Aucune société.'}/>:
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {filteredCo.map((c,i)=><Card key={c.id||i} onClick={()=>setSelectedCompany(c)} style={{padding:14}}>
+              <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Building2 size={16} color={T.brand}/></div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.name||'Sans nom'}</div>
+                  {c.city&&<div style={{fontSize:12,color:T.textMuted}}>{c.city}{c.country?`, ${c.country}`:''}</div>}
+                </div>
+                <ChevronRight size={16} color={T.textSubtle}/>
               </div>
-            </div>
-          </Card>)}
-        </div>)}
-      {sub==='contacts'&&(filteredCu.length===0?<Empty icon={UserRound} msg={q?"Aucun résultat.":"Aucun contact."}/>:
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          <div style={{fontSize:12,color:T.textMuted,marginBottom:4}}>{filteredCu.length} contact{filteredCu.length>1?'s':''}{q?` sur ${allCu.length}`:''}</div>
-          {filteredCu.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
-            <div style={{display:'flex',alignItems:'center',gap:12}}>
-              <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{[c.civility,c.name,c.last_name].filter(Boolean).join(' ')||'Sans nom'}</div>
-                {c.position&&<div style={{fontSize:12,color:T.textMuted}}>{c.position}</div>}
-                <div style={{display:'flex',gap:12,marginTop:4,flexWrap:'wrap'}}>
-                  {c.email&&<a href={`mailto:${c.email}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Mail size={11}/>{c.email}</a>}
-                  {(c.mobile||c.phone)&&<a href={`tel:${c.mobile||c.phone}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Phone size={11}/>{c.mobile||c.phone}</a>}
+            </Card>)}
+          </div>}
+      </>}
+      {sub==='contacts'&&<>
+        <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filteredCu.length} contact{filteredCu.length>1?'s':''}{q?` sur ${allCu.length}`:''}</div>
+        {filteredCu.length===0?<Empty icon={UserRound} msg={q?'Aucun résultat.':'Aucun contact.'}/>:
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {filteredCu.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+              <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{[c.civility,c.name,c.last_name].filter(Boolean).join(' ')||'Sans nom'}</div>
+                  {c.position&&<div style={{fontSize:12,color:T.textMuted}}>{c.position}</div>}
+                  {c.company?.name&&<div style={{fontSize:12,color:T.brand,fontWeight:500}}>{c.company.name}</div>}
+                  <div style={{display:'flex',gap:10,marginTop:4,flexWrap:'wrap'}}>
+                    {c.email&&<a href={`mailto:${c.email}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Mail size={11}/>{c.email}</a>}
+                    {(c.mobile||c.phone)&&<a href={`tel:${c.mobile||c.phone}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Phone size={11}/>{c.mobile||c.phone}</a>}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>)}
-        </div>)}
+            </Card>)}
+          </div>}
+      </>}
     </div>
   </div>;
 }
