@@ -1030,7 +1030,19 @@ function Contacts({session}) {
 }
 
 // ─── Quick Create Event Modal ─────────────────────────────────────
-function QuickCreateModal({session,onClose,onSuccess}) {
+// ─── Shared form helpers ──────────────────────────────────────────
+const inp = {width:'100%',minHeight:44,padding:'0 12px',marginBottom:14,border:`1px solid ${T.borderStrong}`,borderRadius:8,fontSize:14,color:'#1b283f',outline:'none',boxSizing:'border-box',fontFamily:'inherit'};
+
+function SuccessScreen({msg,onClose}) {
+  return <div style={{textAlign:'center',padding:'32px 0 8px'}}>
+    <CheckCircle2 size={44} color={T.success} style={{marginBottom:12}}/>
+    <p style={{fontSize:14,color:'#464e5f',margin:'0 0 24px',lineHeight:1.5}}>{msg}</p>
+    <button onClick={onClose} style={{padding:'10px 28px',borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer'}}>Fermer</button>
+  </div>;
+}
+
+// ─── Create Event Form ─────────────────────────────────────────────
+function CreateEventForm({session,onDone}) {
   const [name,setName]=useState('');
   const [dateFrom,setDateFrom]=useState('');
   const [dateTo,setDateTo]=useState('');
@@ -1038,10 +1050,9 @@ function QuickCreateModal({session,onClose,onSuccess}) {
   const [notes,setNotes]=useState('');
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState('');
-  const [done,setDone]=useState(false);
 
   const submit=async()=>{
-    if(!name.trim()){setErr('Le nom de l\'événement est requis.');return;}
+    if(!name.trim()){setErr("Le nom de l'événement est requis.");return;}
     setLoading(true);setErr('');
     try{
       await api(session.subdomain,session.token,'/v3/events/quick/create',{method:'POST',body:{
@@ -1051,42 +1062,217 @@ function QuickCreateModal({session,onClose,onSuccess}) {
         number_of_persons:persons?parseInt(persons):undefined,
         notes:notes||undefined,
       }});
-      setDone(true);
+      onDone();
     }catch(e){setErr(e.message);}finally{setLoading(false);}
   };
 
+  return <>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nom de l'événement *</label>
+    <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: Séminaire direction 2026" style={inp}/>
+    <div style={{display:'flex',gap:10,marginBottom:0}}>
+      <div style={{flex:1}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Date début</label>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inp}/>
+      </div>
+      <div style={{flex:1}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Date fin</label>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inp}/>
+      </div>
+    </div>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nombre de personnes</label>
+    <input type="number" value={persons} onChange={e=>setPersons(e.target.value)} placeholder="Ex: 50" style={inp}/>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Notes</label>
+    <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Informations complémentaires…" style={{...inp,padding:'10px 12px',resize:'none',height:'auto'}}/>
+    {err&&<div style={{display:'flex',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:T.danger}}><AlertCircle size={16}/><span>{err}</span></div>}
+    <button onClick={submit} disabled={loading} style={{width:'100%',minHeight:44,borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:4}}>
+      {loading&&<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>}{loading?'Création…':"Créer l'événement"}
+    </button>
+  </>;
+}
+
+// ─── Create Contact Form ───────────────────────────────────────────
+function CreateContactForm({session,companies,onDone}) {
+  const [mode,setMode]=useState('new_company'); // 'new_company' | 'existing_company'
+  // Société
+  const [companyName,setCompanyName]=useState('');
+  const [companySearch,setCompanySearch]=useState('');
+  const [selectedCompany,setSelectedCompany]=useState(null);
+  // Contact
+  const [civility,setCivility]=useState('');
+  const [firstName,setFirstName]=useState('');
+  const [lastName,setLastName]=useState('');
+  const [email,setEmail]=useState('');
+  const [phone,setPhone]=useState('');
+  const [mobile,setMobile]=useState('');
+  const [position,setPosition]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const [step,setStep]=useState(1); // 1=société, 2=contact
+
+  const filteredCos=(companies||[]).filter(c=>(c.name||'').toLowerCase().includes(companySearch.toLowerCase())).slice(0,8);
+
+  const submitContact=async(companyId)=>{
+    if(!email.trim()){setErr("L'email est requis.");return;}
+    setLoading(true);setErr('');
+    try{
+      await api(session.subdomain,session.token,'/v3/customers/create',{method:'POST',body:{
+        company_id:companyId,
+        email:email.trim(),
+        name:firstName.trim()||undefined,
+        last_name:lastName.trim()||undefined,
+        phone:phone.trim()||undefined,
+        mobile_phone:mobile.trim()||undefined,
+        position:position.trim()||undefined,
+        civility:civility||undefined,
+        active:true,
+      }});
+      onDone();
+    }catch(e){setErr(e.message);}finally{setLoading(false);}
+  };
+
+  const handleNext=async()=>{
+    if(mode==='new_company'){
+      if(!companyName.trim()){setErr('Le nom de la société est requis.');return;}
+      setLoading(true);setErr('');
+      try{
+        const res=await api(session.subdomain,session.token,'/v3/customer-company/create',{method:'POST',body:{name:companyName.trim(),active:true}});
+        const newId=res?.data?.id||res?.id;
+        if(!newId) throw new Error("ID société non reçu.");
+        setSelectedCompany({id:newId,name:companyName.trim()});
+        setStep(2);
+      }catch(e){setErr(e.message);}finally{setLoading(false);}
+    } else {
+      if(!selectedCompany){setErr('Sélectionnez une société.');return;}
+      setStep(2);
+    }
+  };
+
+  if(step===2) return <>
+    <div style={{background:T.brandTint,border:`1px solid ${T.brandLight}`,borderRadius:8,padding:'8px 12px',marginBottom:14,fontSize:12.5,color:T.brandStrong,display:'flex',alignItems:'center',gap:6}}>
+      <Building2 size={14}/><span>Société : <strong>{selectedCompany?.name}</strong></span>
+    </div>
+    <div style={{display:'flex',gap:10,marginBottom:0}}>
+      <div style={{flex:'0 0 90px'}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Civilité</label>
+        <select value={civility} onChange={e=>setCivility(e.target.value)} style={{...inp,marginBottom:14}}>
+          <option value="">—</option>
+          <option value="M.">M.</option>
+          <option value="Mme">Mme</option>
+          <option value="Dr">Dr</option>
+        </select>
+      </div>
+      <div style={{flex:1}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Prénom</label>
+        <input value={firstName} onChange={e=>setFirstName(e.target.value)} placeholder="Prénom" style={inp}/>
+      </div>
+    </div>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nom *</label>
+    <input value={lastName} onChange={e=>setLastName(e.target.value)} placeholder="Nom de famille" style={inp}/>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Email *</label>
+    <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="contact@exemple.fr" style={inp}/>
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Poste</label>
+    <input value={position} onChange={e=>setPosition(e.target.value)} placeholder="Ex: Directeur commercial" style={inp}/>
+    <div style={{display:'flex',gap:10}}>
+      <div style={{flex:1}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Téléphone</label>
+        <input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="01 23 45 67 89" style={inp}/>
+      </div>
+      <div style={{flex:1}}>
+        <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Mobile</label>
+        <input type="tel" value={mobile} onChange={e=>setMobile(e.target.value)} placeholder="06 00 00 00 00" style={inp}/>
+      </div>
+    </div>
+    {err&&<div style={{display:'flex',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:T.danger}}><AlertCircle size={16}/><span>{err}</span></div>}
+    <div style={{display:'flex',gap:8,marginTop:4}}>
+      <button onClick={()=>{setStep(1);setErr('');}} style={{flex:'0 0 auto',minHeight:44,padding:'0 16px',borderRadius:8,border:`1px solid ${T.border}`,background:'none',color:T.textMuted,fontSize:14,cursor:'pointer'}}>
+        <ChevronLeft size={16}/>
+      </button>
+      <button onClick={()=>submitContact(selectedCompany?.id)} disabled={loading} style={{flex:1,minHeight:44,borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+        {loading&&<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>}{loading?'Création…':'Créer le contact'}
+      </button>
+    </div>
+  </>;
+
+  return <>
+    {/* Mode selector */}
+    <div style={{display:'flex',gap:6,marginBottom:16}}>
+      {[{k:'new_company',label:'Nouvelle société'},{k:'existing_company',label:'Société existante'}].map(o=><button key={o.k} onClick={()=>{setMode(o.k);setErr('');setSelectedCompany(null);}} style={{flex:1,padding:'8px 6px',borderRadius:8,border:`1.5px solid ${mode===o.k?T.brand:T.border}`,background:mode===o.k?T.brandTint:'none',color:mode===o.k?T.brand:T.textMuted,fontSize:12.5,fontWeight:mode===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+    </div>
+
+    {mode==='new_company'&&<>
+      <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nom de la société *</label>
+      <input value={companyName} onChange={e=>setCompanyName(e.target.value)} placeholder="Ex: Acme SAS" style={inp}/>
+    </>}
+
+    {mode==='existing_company'&&<>
+      <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Rechercher une société *</label>
+      <input value={companySearch} onChange={e=>{setCompanySearch(e.target.value);setSelectedCompany(null);}} placeholder="Tapez le nom de la société…" style={inp}/>
+      {companySearch&&filteredCos.length>0&&!selectedCompany&&<div style={{border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',marginTop:-8,marginBottom:14}}>
+        {filteredCos.map((c,i)=><button key={c.id||i} onClick={()=>{setSelectedCompany(c);setCompanySearch(c.name);}} style={{width:'100%',padding:'10px 14px',background:'none',border:'none',borderBottom:i<filteredCos.length-1?`1px solid ${T.border}`:'none',cursor:'pointer',textAlign:'left',fontSize:13.5,color:'#1b283f',display:'block'}}>
+          {c.name}
+          {c.city&&<span style={{fontSize:11.5,color:'#80808f',marginLeft:8}}>{c.city}</span>}
+        </button>)}
+      </div>}
+      {selectedCompany&&<div style={{background:T.brandTint,border:`1px solid ${T.brandLight}`,borderRadius:8,padding:'8px 12px',marginBottom:14,fontSize:12.5,color:T.brandStrong}}>
+        ✓ {selectedCompany.name}
+      </div>}
+    </>}
+
+    {err&&<div style={{display:'flex',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:T.danger}}><AlertCircle size={16}/><span>{err}</span></div>}
+
+    <button onClick={handleNext} disabled={loading} style={{width:'100%',minHeight:44,borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:4}}>
+      {loading&&<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>}
+      {loading?'Création société…':'Suivant — Infos contact'}
+      {!loading&&<ChevronRight size={16}/>}
+    </button>
+  </>;
+}
+
+// ─── Quick Create Modal (choix multiple) ──────────────────────────
+function QuickCreateModal({session,companies,onClose,onSuccess}) {
+  const [type,setType]=useState(null); // null | 'event' | 'contact'
+  const [done,setDone]=useState(false);
+  const [doneMsg,setDoneMsg]=useState('');
+
+  const handleDone=(msg)=>{setDone(true);setDoneMsg(msg);};
+
   return <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
-    <div style={{background:T.surface,borderRadius:'20px 20px 0 0',width:'100%',maxWidth:500,padding:24,boxShadow:'0 -8px 32px rgba(0,0,0,0.15)'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-        <h2 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0}}>Nouvel événement</h2>
+    <div style={{background:T.surface,borderRadius:'20px 20px 0 0',width:'100%',maxWidth:500,maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 32px rgba(0,0,0,0.15)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'20px 24px 16px',borderBottom:type?`1px solid ${T.border}`:'none',flexShrink:0}}>
+        <h2 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0}}>
+          {!type?'Créer…':type==='event'?'Nouvel événement':'Nouveau client'}
+        </h2>
         <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted}}><X size={20}/></button>
       </div>
-      {done?<div style={{textAlign:'center',padding:'24px 0'}}>
-        <CheckCircle2 size={40} color={T.success} style={{marginBottom:12}}/>
-        <p style={{fontSize:14,color:T.text,margin:'0 0 20px'}}>Événement créé avec succès !</p>
-        <button onClick={onSuccess} style={{padding:'10px 24px',borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer'}}>Fermer</button>
-      </div>:<>
-        <label style={{display:'block',fontSize:13,fontWeight:500,color:T.text,marginBottom:6}}>Nom de l'événement *</label>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: Séminaire direction 2026" style={{width:'100%',minHeight:44,padding:'0 12px',marginBottom:16,border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,color:T.ink,outline:'none',boxSizing:'border-box'}}/>
-        <div style={{display:'flex',gap:12,marginBottom:16}}>
-          <div style={{flex:1}}>
-            <label style={{display:'block',fontSize:13,fontWeight:500,color:T.text,marginBottom:6}}>Date début</label>
-            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{width:'100%',minHeight:44,padding:'0 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,color:T.ink,outline:'none',boxSizing:'border-box'}}/>
+
+      <div style={{overflowY:'auto',flex:1,padding:'16px 24px 24px'}}>
+        {done?<SuccessScreen msg={doneMsg} onClose={()=>{onSuccess();}}/>:
+        !type?<>
+          {/* Choix du type */}
+          <p style={{fontSize:13,color:T.textMuted,margin:'0 0 16px'}}>Que souhaitez-vous créer ?</p>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {[
+              {k:'event',icon:Calendar,label:'Événement',desc:'Créer un nouvel événement rapide'},
+              {k:'contact',icon:Users,label:'Client',desc:'Nouvelle société avec contact, ou contact dans société existante'},
+            ].map(({k,icon:Icon,label,desc})=><button key={k} onClick={()=>setType(k)} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',borderRadius:12,border:`1.5px solid ${T.border}`,background:T.surface,cursor:'pointer',textAlign:'left',transition:'all 0.15s'}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.brand;e.currentTarget.style.background=T.brandSubtle;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.background=T.surface;}}>
+              <div style={{width:40,height:40,borderRadius:10,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <Icon size={20} color={T.brand}/>
+              </div>
+              <div>
+                <div style={{fontSize:14,fontWeight:600,color:T.ink}}>{label}</div>
+                <div style={{fontSize:12.5,color:T.textMuted,marginTop:2}}>{desc}</div>
+              </div>
+              <ChevronRight size={16} color={T.textSubtle} style={{marginLeft:'auto',flexShrink:0}}/>
+            </button>)}
           </div>
-          <div style={{flex:1}}>
-            <label style={{display:'block',fontSize:13,fontWeight:500,color:T.text,marginBottom:6}}>Date fin</label>
-            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:'100%',minHeight:44,padding:'0 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,color:T.ink,outline:'none',boxSizing:'border-box'}}/>
-          </div>
-        </div>
-        <label style={{display:'block',fontSize:13,fontWeight:500,color:T.text,marginBottom:6}}>Nombre de personnes</label>
-        <input type="number" value={persons} onChange={e=>setPersons(e.target.value)} placeholder="Ex: 50" style={{width:'100%',minHeight:44,padding:'0 12px',marginBottom:16,border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,color:T.ink,outline:'none',boxSizing:'border-box'}}/>
-        <label style={{display:'block',fontSize:13,fontWeight:500,color:T.text,marginBottom:6}}>Notes</label>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Informations complémentaires…" style={{width:'100%',padding:'10px 12px',marginBottom:16,border:`1px solid ${T.border}`,borderRadius:8,fontSize:14,color:T.ink,outline:'none',boxSizing:'border-box',resize:'none',fontFamily:'inherit'}}/>
-        {err&&<div style={{display:'flex',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 12px',marginBottom:16,fontSize:12.5,color:T.danger}}><AlertCircle size={16}/><span>{err}</span></div>}
-        <button onClick={submit} disabled={loading} style={{width:'100%',minHeight:44,borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-          {loading&&<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>}{loading?'Création…':'Créer l\'événement'}
-        </button>
-      </>}
+        </>:
+        type==='event'?
+          <CreateEventForm session={session} onDone={()=>handleDone('Événement créé avec succès !')}/>:
+          <CreateContactForm session={session} companies={companies} onDone={()=>handleDone('Client créé avec succès !')}/>
+        }
+      </div>
     </div>
   </div>;
 }
@@ -1229,7 +1415,7 @@ export default function App() {
         <span style={{fontSize:9.5,fontWeight:tab===k?600:400}}>{label}</span>
       </button>)}
     </div>}
-    {showCreate&&<QuickCreateModal session={session} onClose={()=>setShowCreate(false)} onSuccess={()=>{setShowCreate(false);setTab('events');}}/>}
+    {showCreate&&<QuickCreateModal session={session} companies={(() => { try { const c=cacheGet(cacheKey(session.subdomain,'allpages_/v3/customer-company')); return c?.data||[]; } catch{return [];} })()} onClose={()=>setShowCreate(false)} onSuccess={()=>{setShowCreate(false);setTab('contacts');}}/>}
     <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
   </div>;
 }
