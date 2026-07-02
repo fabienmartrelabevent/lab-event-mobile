@@ -959,7 +959,7 @@ export default function App() {
     {k:'activites',label:'Activités',icon:Activity},
     {k:'contacts',label:'Contacts',icon:Users},
   ];
-  const extraTabs=['prestataires','rentabilite','analytics','scheduler','planning'];
+  const extraTabs=['prestataires','rentabilite','analytics','scheduler','planning','articles','planningbyday'];
   const navTo=k=>{setTab(k);setDrawerOpen(false);if(k!=='events')setEventDetail(null);};
   const drawerGroups=[
     {section:'Principal',items:[
@@ -977,6 +977,10 @@ export default function App() {
     {section:'Planning',items:[
       {k:'planning',label:'Planning salles',icon:Calendar},
       {k:'scheduler',label:'Réservations',icon:MapPin},
+      {k:'planningbyday',label:'Planning par jour',icon:Calendar},
+    ]},
+    {section:'Catalogue',items:[
+      {k:'articles',label:'Articles',icon:FileText},
     ]},
   ];
 
@@ -1040,6 +1044,8 @@ export default function App() {
       {tab==='rentabilite'&&<Rentabilite session={session}/>}
       {tab==='analytics'&&<AnalyticsLight session={session}/>}
       {tab==='scheduler'&&<SchedulerView session={session}/>}
+      {tab==='articles'&&<Articles session={session}/>}
+      {tab==='planningbyday'&&<PlanningByDay session={session}/>}
     </div>
     {/* Bottom nav */}
     {!extraTabs.includes(tab)&&<div style={{position:'fixed',bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:'flex',boxShadow:'0 -4px 16px rgba(16,24,40,0.06)'}}>
@@ -1283,6 +1289,134 @@ function SchedulerView({session}) {
             {(r.status||r.status_name)&&<Badge label={safeStr(r.status||r.status_name)} color={T.brand}/>}
           </div>
         </Card>)}
+      </div>}
+  </div>;
+}
+
+// ─── Articles / Goods ─────────────────────────────────────────────
+function Articles({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+  const [filterSection,setFilterSection]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/goods',{method:'POST',body:{}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const all=(items||[]).filter(a=>a.active!==false);
+  const sections=[...new Set(all.map(a=>a.section).filter(Boolean))].sort();
+  const q=search.toLowerCase();
+
+  const filtered=all.filter(a=>{
+    const matchQ=!q||(a.name||'').toLowerCase().includes(q)||(a.section||'').toLowerCase().includes(q);
+    const matchS=!filterSection||a.section===filterSection;
+    return matchQ&&matchS;
+  }).sort((a,b)=>(a.section||'').localeCompare(b.section||'')||(a.name||'').localeCompare(b.name||''));
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom, section…"/>
+    {sections.length>0&&<div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap'}}>
+      <button onClick={()=>setFilterSection('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!filterSection?T.brand:T.border}`,background:!filterSection?T.brandTint:'none',color:!filterSection?T.brand:T.textMuted,fontSize:11.5,cursor:'pointer',fontWeight:!filterSection?600:400}}>Tous</button>
+      {sections.map(s=><button key={s} onClick={()=>setFilterSection(s===filterSection?'':s)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${filterSection===s?T.brand:T.border}`,background:filterSection===s?T.brandTint:'none',color:filterSection===s?T.brand:T.textMuted,fontSize:11.5,cursor:'pointer',fontWeight:filterSection===s?600:400}}>{s}</button>)}
+    </div>}
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} article{filtered.length>1?'s':''}</div>
+    {filtered.length===0?<Empty icon={FileText} msg="Aucun article."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {filtered.map((a,i)=><Card key={a.id||i} style={{padding:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.name||'Article'}</div>
+              <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                {a.section&&<Badge label={a.section} color={T.secondary}/>}
+                {a.unit&&<span style={{fontSize:11.5,color:T.textMuted}}>/ {a.unit}</span>}
+                {a.vat_rate&&<span style={{fontSize:11.5,color:T.textMuted}}>TVA {a.vat_rate}%</span>}
+              </div>
+              {(a.margin_rate||a.commission_rate)&&<div style={{display:'flex',gap:12,marginTop:6,fontSize:11.5}}>
+                {a.margin_rate&&<span style={{color:T.success}}>Marge {a.margin_rate}%</span>}
+                {a.commission_rate&&<span style={{color:T.info}}>Comm. {a.commission_rate}%</span>}
+              </div>}
+            </div>
+            <div style={{textAlign:'right',flexShrink:0}}>
+              {a.sell_price&&<div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(a.sell_price)}</div>}
+              {a.price&&a.price!==a.sell_price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU {money(a.price)}</div>}
+              {!a.sell_price&&!a.price&&a.without_price&&<span style={{fontSize:11.5,color:T.textMuted}}>Sur devis</span>}
+            </div>
+          </div>
+        </Card>)}
+      </div>}
+  </div>;
+}
+
+// ─── Planning par jour ────────────────────────────────────────────
+function PlanningByDay({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning-by-day',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const q=search.toLowerCase();
+  const sorted=[...(items||[])].sort((a,b)=>new Date(b.day_date||0)-new Date(a.day_date||0));
+  const filtered=q?sorted.filter(r=>
+    (r.event_name||'').toLowerCase().includes(q)||
+    (r.room_name||r.place_name||'').toLowerCase().includes(q)||
+    (safeStr(r.day_date)).toLowerCase().includes(q)
+  ):sorted;
+
+  // Grouper par date
+  const byDate={};
+  filtered.forEach(r=>{
+    const k=r.day_date||'Sans date';
+    if(!byDate[k]) byDate[k]=[];
+    byDate[k].push(r);
+  });
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Événement, salle, lieu…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:12}}>{filtered.length} jour{filtered.length>1?'s':''} de planning</div>
+    {Object.keys(byDate).length===0?<Empty icon={Calendar} msg="Aucune donnée de planning."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:12}}>
+        {Object.entries(byDate).map(([d,rows])=><div key={d}>
+          <div style={{fontSize:12,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6,paddingLeft:4}}>{date(d)}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {rows.map((r,i)=><Card key={r.composite_id||i} style={{padding:12}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,marginBottom:4}}>{r.event_name||'Événement'}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                {r.assembly_date_start_client&&<div style={{fontSize:11.5,color:T.textMuted,display:'flex',gap:6}}>
+                  <span style={{color:T.info,fontWeight:500}}>Montage client</span>
+                  <span>{date(r.assembly_date_start_client)}{r.assembly_date_end_client&&r.assembly_date_end_client!==r.assembly_date_start_client?` → ${date(r.assembly_date_end_client)}`:''}</span>
+                </div>}
+                {r.assembly_date_start_intern&&<div style={{fontSize:11.5,color:T.textMuted,display:'flex',gap:6}}>
+                  <span style={{color:T.secondary,fontWeight:500}}>Montage interne</span>
+                  <span>{date(r.assembly_date_start_intern)}{r.assembly_date_end_intern&&r.assembly_date_end_intern!==r.assembly_date_start_intern?` → ${date(r.assembly_date_end_intern)}`:''}</span>
+                </div>}
+                {r.disassembly_date_start_client&&<div style={{fontSize:11.5,color:T.textMuted,display:'flex',gap:6}}>
+                  <span style={{color:T.warning,fontWeight:500}}>Démontage client</span>
+                  <span>{date(r.disassembly_date_start_client)}{r.disassembly_date_end_client&&r.disassembly_date_end_client!==r.disassembly_date_start_client?` → ${date(r.disassembly_date_end_client)}`:''}</span>
+                </div>}
+                {r.assembly_comment_client&&<div style={{fontSize:11.5,color:T.textMuted,borderLeft:`2px solid ${T.border}`,paddingLeft:6,marginTop:2}}>{strip(r.assembly_comment_client).slice(0,100)}</div>}
+              </div>
+              {r.day_number&&<div style={{fontSize:11,color:T.textSubtle,marginTop:4}}>Jour {r.day_number}</div>}
+            </Card>)}
+          </div>
+        </div>)}
       </div>}
   </div>;
 }
