@@ -26,11 +26,24 @@ function buildSubdomain(s) {
   return s.trim().replace(/^https?:\/\//,'').replace(/\.lab-event\.com.*$/,'').replace(/\/$/,'');
 }
 
-// ─── Cache localStorage ──────────────────────────────────────────
+// ─── Cache hybride : mémoire (gros) + localStorage (petits) ─────
+// localStorage ~5MB max → on garde en mémoire les gros datasets
+const _memCache = new Map(); // clé → {data, ts}
+
 function cacheKey(subdomain, path) {
   return `le_cache_${subdomain}_${path.replace(/[^a-z0-9]/gi,'_')}`;
 }
+// Endpoints volumineux → mémoire uniquement
+const BIG_PATHS = ['analytics_events','vue_analytics_light','rentability','planning_by_day','partner_companies'];
+function isBig(key) { return BIG_PATHS.some(p => key.includes(p)); }
+
 function cacheGet(key) {
+  // Mémoire d'abord
+  if (_memCache.has(key)) {
+    const {data, ts} = _memCache.get(key);
+    return { data, age: Date.now() - ts };
+  }
+  // localStorage ensuite
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -39,9 +52,15 @@ function cacheGet(key) {
   } catch { return null; }
 }
 function cacheSet(key, data) {
-  try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+  _memCache.set(key, { data, ts: Date.now() });
+  if (!isBig(key)) {
+    try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+  }
 }
 function cacheClear(subdomain) {
+  // Vider la mémoire
+  for (const k of _memCache.keys()) { if (k.includes(subdomain)) _memCache.delete(k); }
+  // Vider localStorage
   try {
     Object.keys(localStorage).filter(k=>k.startsWith(`le_cache_${subdomain}`)).forEach(k=>localStorage.removeItem(k));
   } catch {}
@@ -310,7 +329,7 @@ function EventRow({event,onClick}) {
     </div>
     <div style={{flex:1,minWidth:0}}>
       <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.event_name||'Événement sans nom'}</div>
-      {event.customer&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.customer}</div>}
+      {(event.company_name||event.customer)&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.company_name||event.customer}</div>}
       <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
         <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{date(event.events_date_from)}</span>
         {event.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{event.number_of_persons}</span>:null}
@@ -330,13 +349,19 @@ function EventDetail({event,onBack}) {
     {label:'Date début',value:date(event.events_date_from)},
     {label:'Date fin',value:date(event.events_date_to)},
     {label:'Personnes',value:event.number_of_persons},
-    {label:'Client',value:event.customer},
-    {label:'Commercial',value:event.member||event.owner},
+    {label:'Société',value:event.company_name||event.customer},
+    {label:'Contact',value:event.contact_name},
+    {label:'Email',value:event.client_email},
+    {label:'Téléphone',value:event.client_phone},
+    {label:'Commercial',value:event.nickname||event.member},
     {label:'Résultat',value:event.win_lost},
+    {label:'Probabilité',value:event.percentage_success!=null?`${event.percentage_success}%`:null},
     {label:'Lieu',value:event.place},
     {label:'Type',value:event.event_type},
-    {label:'Source',value:event.source},
+    {label:'Source',value:event.source_name||event.source},
+    {label:'Catégorie',value:event.event_category},
     {label:'Code',value:event.incremental_code},
+    {label:'Prestation',value:event.main_product},
   ].filter(f=>f.value);
 
   return <div>
@@ -365,7 +390,9 @@ function EventDetail({event,onBack}) {
       <Card>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
-          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>
+          {(f.label==='Email'&&f.value)?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+          :(f.label==='Téléphone'&&f.value)?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+          :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
     </div>
@@ -394,9 +421,9 @@ function Events({session}) {
   const [pipeline,setPipeline]=useState('');
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
-  const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
+  const pipelines=[...new Set(sorted.map(e=>e.win_lost||'Non défini').filter(Boolean))];
   const filtered=sorted.filter(e=>{
-    const mQ=!q||(e.event_name||'').toLowerCase().includes(q)||(e.customer||'').toLowerCase().includes(q)||(e.status_name||'').toLowerCase().includes(q)||(e.place||'').toLowerCase().includes(q);
+    const mQ=!q||(e.event_name||'').toLowerCase().includes(q)||(e.customer||'').toLowerCase().includes(q)||(e.company_name||'').toLowerCase().includes(q)||(e.contact_name||'').toLowerCase().includes(q)||(e.status_name||'').toLowerCase().includes(q)||(e.place||'').toLowerCase().includes(q);
     const mP=!pipeline||e.win_lost===pipeline;
     return mQ&&mP;
   });
@@ -1383,6 +1410,7 @@ export default function App() {
   const handleLogin = s => {
     try { localStorage.setItem('le_session', JSON.stringify(s)); } catch {}
     setSession(s);
+    prefetchAll(s);
   };
 
   const handleLogout = () => {
