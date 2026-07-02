@@ -113,6 +113,14 @@ async function fetchAllPagesCached(subdomain, token, basePath, onRefresh) {
   return fresh;
 }
 
+
+// Date j-2 ans pour filtrer les données
+function dateJ2Ans() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 2);
+  return d.toISOString().split('T')[0];
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────
 const money = n => n==null||isNaN(n)?'—':new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const date  = d => { if(!d) return '—'; try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(d)); } catch{return d;} };
@@ -234,8 +242,8 @@ function Dashboard({session,onEventClick}) {
     setLoading(true);setErr('');
     try {
       const [e,q]=await Promise.all([
-        api(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{}}),
-        api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}}),
+        api(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}}),
+        api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}}),
       ]);
       setEvents(Array.isArray(e)?e:[]);
       setQuotes(Array.isArray(q)?q:[]);
@@ -331,7 +339,7 @@ function Events({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -369,7 +377,7 @@ function Planning({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -485,7 +493,7 @@ function Quotes({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [selected,setSelected]=useState(null);
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(selected) return <QuoteDetail quote={selected} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
@@ -526,7 +534,7 @@ function Bills({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -544,7 +552,7 @@ function Bills({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Receipt} msg={q?"Aucun résultat.":"Aucune facture."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((b,i)=><Card key={b.bill_id||i} style={{padding:14}}>
+        {filtered.map((b,i)=><Card key={b.bill_id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.event||b.customer||'Facture'}</div>
@@ -566,7 +574,7 @@ function Payments({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -582,7 +590,7 @@ function Payments({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} paiement{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={CreditCard} msg={q?"Aucun résultat.":"Aucun paiement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
+        {filtered.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{p.bill_number||'Paiement'}</div>
@@ -607,7 +615,7 @@ function Activites({session}) {
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
 
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -617,7 +625,10 @@ function Activites({session}) {
   const soon=all.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
 
   const q=search.toLowerCase();
-  const byFilter=filter==='expired'?expired:filter==='soon'?soon:all;
+  const bySorted=[...all].sort((a,b)=>new Date(b.date||b.deadline||0)-new Date(a.date||a.deadline||0));
+  const expired2=bySorted.filter(a=>a.deadline_is_expired);
+  const soon2=bySorted.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
+  const byFilter=filter==='expired'?expired2:filter==='soon'?soon2:bySorted;
   const filtered=q?byFilter.filter(a=>
     (a.corporation_client_name||'').toLowerCase().includes(q)||
     (a.client_contact_name||'').toLowerCase().includes(q)||
