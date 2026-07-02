@@ -25,8 +25,14 @@ function buildSubdomain(s) {
 }
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
-  const url = `${PROXY}/api/proxy?path=${encodeURIComponent(path)}`;
-  // Inject per_page for POST analytics calls to bypass default pagination limit
+  // For GET requests, append per_page as query param
+  // For POST analytics requests, inject per_page in body
+  let finalPath = path;
+  if (method === 'GET') {
+    const sep = path.includes('?') ? '&' : '?';
+    finalPath = `${path}${sep}per_page=2000`;
+  }
+  const url = `${PROXY}/api/proxy?path=${encodeURIComponent(finalPath)}`;
   const enrichedBody = method === 'POST' && body !== undefined
     ? { per_page: 2000, ...body }
     : body;
