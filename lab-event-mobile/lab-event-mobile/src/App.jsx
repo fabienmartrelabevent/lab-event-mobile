@@ -429,19 +429,28 @@ function Finances({session}) {
 }
 
 // ─── Quote Detail ─────────────────────────────────────────────────
+function safeStr(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  if (Array.isArray(v)) return v.join(', ');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
 function QuoteDetail({quote:q, onBack}) {
   const statusColor = /sign/i.test(q.status||'')?T.success:/rejet|annul/i.test(q.status||'')?T.danger:T.warning;
   const fields = [
-    {label:'Numéro', value:q.nb||q.incremental_code},
+    {label:'Numéro', value:safeStr(q.nb||q.incremental_code)},
     {label:'Date d\'émission', value:date(q.date_of_quote||q.date)},
     {label:'Date événement', value:date(q.date_of_event)},
-    {label:'Client', value:q.customer},
-    {label:'Événement', value:q.event},
-    {label:'Statut événement', value:q.event_state},
-    {label:'Commercial', value:q.owner||q.member},
-    {label:'Chef de projet', value:q.pm},
-    {label:'Prestation principale', value:q.main_product},
-    {label:'TVA', value:q.vat_rates},
+    {label:'Client', value:safeStr(q.customer)},
+    {label:'Événement', value:safeStr(q.event)},
+    {label:'Statut événement', value:safeStr(q.event_state)},
+    {label:'Commercial', value:safeStr(q.owner||q.member)},
+    {label:'Chef de projet', value:safeStr(q.pm)},
+    {label:'Prestation principale', value:safeStr(q.main_product)},
+    {label:'TVA', value:safeStr(q.vat_rates)},
   ].filter(f=>f.value);
 
   return <div>
@@ -481,7 +490,7 @@ function QuoteDetail({quote:q, onBack}) {
       {/* Notes */}
       {q.info&&<Card style={{padding:14}}>
         <div style={{fontSize:12,fontWeight:600,color:T.textMuted,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>Notes</div>
-        <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{q.info}</div>
+        <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{strip(safeStr(q.info))}</div>
       </Card>}
     </div>
   </div>;
