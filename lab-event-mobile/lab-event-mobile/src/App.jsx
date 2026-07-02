@@ -359,13 +359,74 @@ function Finances({session}) {
   </div>;
 }
 
+// ─── Quote Detail ─────────────────────────────────────────────────
+function QuoteDetail({quote:q, onBack}) {
+  const statusColor = /sign/i.test(q.status||'')?T.success:/rejet|annul/i.test(q.status||'')?T.danger:T.warning;
+  const fields = [
+    {label:'Numéro', value:q.nb||q.incremental_code},
+    {label:'Date d\'émission', value:date(q.date_of_quote||q.date)},
+    {label:'Date événement', value:date(q.date_of_event)},
+    {label:'Client', value:q.customer},
+    {label:'Événement', value:q.event},
+    {label:'Statut événement', value:q.event_state},
+    {label:'Commercial', value:q.owner||q.member},
+    {label:'Chef de projet', value:q.pm},
+    {label:'Prestation principale', value:q.main_product},
+    {label:'TVA', value:q.vat_rates},
+  ].filter(f=>f.value);
+
+  return <div>
+    <div style={{padding:'16px 16px 8px'}}>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
+        <ChevronLeft size={18}/> Retour
+      </button>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:4}}>
+        <h1 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0,flex:1}}>{q.title||q.event||'Devis'}</h1>
+        {q.status&&<Badge label={q.status} color={statusColor}/>}
+      </div>
+      {q.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>{q.nb}</div>}
+
+      {/* Montants */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        {[
+          {label:'HT', value:money(q.total_ht), accent:T.ink},
+          {label:'TTC', value:money(q.ttc), accent:T.brand},
+          {label:'Marge', value:money(q.total_marge), accent:T.success},
+          {label:'Commission', value:money(q.total_com), accent:T.info},
+        ].filter(f=>f.value!=='—').map((f,i)=><div key={i} style={{flex:1,minWidth:80,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+          <div style={{fontSize:11,color:T.textMuted,marginBottom:2}}>{f.label}</div>
+          <div style={{fontSize:14,fontWeight:700,color:f.accent}}>{f.value}</div>
+        </div>)}
+      </div>
+
+      {/* Détails */}
+      <Card style={{marginBottom:16}}>
+        {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+        </div>)}
+      </Card>
+
+      {/* Notes */}
+      {q.info&&<Card style={{padding:14}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.textMuted,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>Notes</div>
+        <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{q.info}</div>
+      </Card>}
+    </div>
+  </div>;
+}
+
 function Quotes({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [selected,setSelected]=useState(null);
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
+  if(selected) return <QuoteDetail quote={selected} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
@@ -382,15 +443,16 @@ function Quotes({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{q?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={FileText} msg={q?"Aucun résultat.":"Aucun devis."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((q,i)=><Card key={q.quote_id||i} style={{padding:14}}>
+        {filtered.map((item,i)=><Card key={item.quote_id||i} onClick={()=>setSelected(item)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{q.title||q.event||'Devis'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{q.nb} · {date(q.date_of_quote)}</div>
+              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.title||item.event||'Devis'}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{item.nb} · {date(item.date_of_quote)}</div>
+              {item.customer&&<div style={{fontSize:12,color:T.textMuted}}>{item.customer}</div>}
             </div>
-            <div style={{textAlign:'right',flexShrink:0}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(q.ttc)}</div>
-              {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
+            <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(item.ttc)}</div>
+              {item.status&&<Badge label={item.status} color={/sign/i.test(item.status)?T.success:/rejet|annul/i.test(item.status)?T.danger:T.warning}/>}
             </div>
           </div>
         </Card>)}
