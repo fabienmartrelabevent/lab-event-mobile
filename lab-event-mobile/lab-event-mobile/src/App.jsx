@@ -919,26 +919,25 @@ function QuickCreateModal({session,onClose,onSuccess}) {
 // ─── App Shell ───────────────────────────────────────────────────
 export default function App() {
   const [session,setSession]=useState(()=>{
-    try {
-      const s = localStorage.getItem('le_session');
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
+    try { const s=localStorage.getItem('le_session'); return s?JSON.parse(s):null; } catch { return null; }
   });
   const [tab,setTab]=useState('dashboard');
   const [showCreate,setShowCreate]=useState(false);
   const [eventDetail,setEventDetail]=useState(null);
+  const [drawerOpen,setDrawerOpen]=useState(false);
 
   const handleLogin = s => {
     try { localStorage.setItem('le_session', JSON.stringify(s)); } catch {}
     setSession(s);
-    // Prefetch toutes les données en arrière-plan dès la connexion
     const endpoints = [
-      {path:'/v3/analytics/events', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/finance-documents/quotes', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/finance-documents/bills', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/bill-prepayments', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/activity', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/events/vue-planning', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/events', opts:{method:'POST',body:{events_date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/finance-documents/quotes', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/finance-documents/bills', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/bill-prepayments', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/activity', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/partner-companies', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/finance-documents/rentability', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      {path:'/v3/analytics/finance-documents/vue-analytics-light', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
     ];
     endpoints.forEach(({path,opts})=>apiCached(s.subdomain,s.token,path,opts).catch(()=>{}));
     fetchAllPagesCached(s.subdomain,s.token,'/v3/customer-company').catch(()=>{});
@@ -960,39 +959,330 @@ export default function App() {
     {k:'activites',label:'Activités',icon:Activity},
     {k:'contacts',label:'Contacts',icon:Users},
   ];
+  const extraTabs=['prestataires','rentabilite','analytics','scheduler','planning'];
+  const navTo=k=>{setTab(k);setDrawerOpen(false);if(k!=='events')setEventDetail(null);};
+  const drawerGroups=[
+    {section:'Principal',items:[
+      {k:'dashboard',label:'Aperçu',icon:LayoutDashboard},
+      {k:'events',label:'Événements',icon:Calendar},
+      {k:'finances',label:'Finances',icon:Euro},
+      {k:'activites',label:'Activités',icon:Activity},
+      {k:'contacts',label:'Contacts',icon:Users},
+    ]},
+    {section:'Commercial & Finance',items:[
+      {k:'prestataires',label:'Prestataires',icon:Briefcase},
+      {k:'rentabilite',label:'Rentabilité',icon:TrendingUp},
+      {k:'analytics',label:'Analytics produits',icon:TrendingUp},
+    ]},
+    {section:'Planning',items:[
+      {k:'planning',label:'Planning salles',icon:Calendar},
+      {k:'scheduler',label:'Réservations',icon:MapPin},
+    ]},
+  ];
 
   return <div style={{minHeight:'100vh',background:T.surfaceMuted,fontFamily:"'Roboto','Helvetica Neue',Arial,sans-serif",display:'flex',flexDirection:'column'}}>
-    <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10}}>
-      <div>
-        <div style={{fontSize:15,fontWeight:700,color:T.ink}}>Lab-event</div>
-        <div style={{fontSize:11.5,color:T.textMuted}}>{session.subdomain}</div>
+    {/* Overlay */}
+    {drawerOpen&&<div onClick={()=>setDrawerOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',zIndex:50}}/>}
+    {/* Drawer */}
+    <div style={{position:'fixed',top:0,left:0,bottom:0,width:280,background:T.surface,zIndex:51,transform:drawerOpen?'translateX(0)':'translateX(-100%)',transition:'transform 0.25s ease',boxShadow:'4px 0 24px rgba(16,24,40,0.12)',display:'flex',flexDirection:'column'}}>
+      <div style={{padding:'20px 16px 12px',borderBottom:`1px solid ${T.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:700,color:T.ink}}>Lab-event</div>
+          <div style={{fontSize:12,color:T.textMuted}}>{session.subdomain}</div>
+        </div>
+        <button onClick={()=>setDrawerOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,padding:4}}><X size={20}/></button>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:'4px 0'}}>
+        {drawerGroups.map(g=><div key={g.section}>
+          <div style={{padding:'12px 16px 4px',fontSize:10,fontWeight:700,color:T.textSubtle,textTransform:'uppercase',letterSpacing:'0.8px'}}>{g.section}</div>
+          {g.items.map(({k,label,icon:Icon})=><button key={k} onClick={()=>navTo(k)} style={{width:'100%',background:tab===k?T.brandTint:'none',border:'none',cursor:'pointer',padding:'10px 16px',display:'flex',alignItems:'center',gap:10,color:tab===k?T.brand:T.text,fontSize:13.5,fontWeight:tab===k?600:400,textAlign:'left',borderRight:tab===k?`3px solid ${T.brand}`:'3px solid transparent',transition:'all 0.15s'}}>
+            <Icon size={17} strokeWidth={2}/>{label}
+          </button>)}
+        </div>)}
+      </div>
+      <div style={{padding:16,borderTop:`1px solid ${T.border}`}}>
+        <button onClick={handleLogout} style={{width:'100%',background:'none',border:`1px solid ${T.border}`,borderRadius:8,cursor:'pointer',padding:'10px 16px',display:'flex',alignItems:'center',gap:8,color:T.textMuted,fontSize:13}}>
+          <LogOut size={15}/> Déconnexion
+        </button>
+      </div>
+    </div>
+    {/* Header */}
+    <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:10}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <button onClick={()=>setDrawerOpen(true)} style={{background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',gap:4,padding:4}}>
+          <span style={{display:'block',width:18,height:2,background:T.ink,borderRadius:2}}/>
+          <span style={{display:'block',width:14,height:2,background:T.ink,borderRadius:2}}/>
+          <span style={{display:'block',width:18,height:2,background:T.ink,borderRadius:2}}/>
+        </button>
+        <div>
+          <div style={{fontSize:15,fontWeight:700,color:T.ink,lineHeight:1.1}}>Lab-event</div>
+          <div style={{fontSize:10.5,color:T.textMuted}}>{session.subdomain}</div>
+        </div>
       </div>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <button onClick={()=>setShowCreate(true)} style={{width:34,height:34,borderRadius:9,background:T.brand,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(0,179,181,0.3)'}}>
           <Plus size={18} color="#fff" strokeWidth={2.5}/>
         </button>
-        <button onClick={handleLogout} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center',gap:4,fontSize:12}}>
+        <button onClick={handleLogout} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center'}}>
           <LogOut size={15}/>
         </button>
       </div>
     </div>
-
-    <div style={{flex:1,overflowY:'auto',paddingBottom:72}}>
+    {/* Content */}
+    <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} onBack={()=>setEventDetail(null)}/>:<Events session={session}/>)}
       {tab==='finances'&&<Finances session={session}/>}
       {tab==='activites'&&<Activites session={session}/>}
       {tab==='contacts'&&<Contacts session={session}/>}
+      {tab==='planning'&&<Planning session={session}/>}
+      {tab==='prestataires'&&<Prestataires session={session}/>}
+      {tab==='rentabilite'&&<Rentabilite session={session}/>}
+      {tab==='analytics'&&<AnalyticsLight session={session}/>}
+      {tab==='scheduler'&&<SchedulerView session={session}/>}
     </div>
-
-    <div style={{position:'fixed',bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:'flex',boxShadow:'0 -4px 16px rgba(16,24,40,0.06)'}}>
-      {tabs.map(({k,label,icon:Icon})=><button key={k} onClick={()=>{setTab(k);if(k!=='events')setEventDetail(null);}} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 0 12px',display:'flex',flexDirection:'column',alignItems:'center',gap:4,color:tab===k?T.brand:T.textMuted,transition:'color 0.18s'}}>
+    {/* Bottom nav */}
+    {!extraTabs.includes(tab)&&<div style={{position:'fixed',bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:'flex',boxShadow:'0 -4px 16px rgba(16,24,40,0.06)'}}>
+      {tabs.map(({k,label,icon:Icon})=><button key={k} onClick={()=>navTo(k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 0 12px',display:'flex',flexDirection:'column',alignItems:'center',gap:4,color:tab===k?T.brand:T.textMuted,transition:'color 0.18s'}}>
         <Icon size={18} strokeWidth={tab===k?2.4:2.2}/>
         <span style={{fontSize:9.5,fontWeight:tab===k?600:400}}>{label}</span>
       </button>)}
-    </div>
-
+    </div>}
     {showCreate&&<QuickCreateModal session={session} onClose={()=>setShowCreate(false)} onSuccess={()=>{setShowCreate(false);setTab('events');}}/>}
     <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+  </div>;
+}
+
+// ─── Prestataires ─────────────────────────────────────────────────
+function Prestataires({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/partner-companies',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const q=search.toLowerCase();
+  const sorted=[...(items||[])].filter(p=>p.active!==false).sort((a,b)=>(Number(b.total_ttc_quotes_signed)||0)-(Number(a.total_ttc_quotes_signed)||0));
+  const filtered=q?sorted.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.company_type||'').toLowerCase().includes(q)||(p.country||'').toLowerCase().includes(q)):sorted;
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom, type, pays…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} prestataire{filtered.length>1?'s':''}</div>
+    {filtered.length===0?<Empty icon={Briefcase} msg="Aucun prestataire."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {filtered.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+            <div style={{width:36,height:36,borderRadius:9,background:`${T.secondary}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <Briefcase size={16} color={T.secondary}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name||'Sans nom'}</div>
+              <div style={{display:'flex',gap:8,marginTop:3,flexWrap:'wrap'}}>
+                {p.company_type&&<Badge label={p.company_type} color={T.secondary}/>}
+                {p.country&&<span style={{fontSize:11.5,color:T.textMuted}}>{p.country}</span>}
+              </div>
+              {(p.total_ttc_quotes_signed||p.total_ttc_bills_signed)&&<div style={{display:'flex',gap:12,marginTop:6,flexWrap:'wrap'}}>
+                {p.total_ttc_quotes_signed&&<div style={{fontSize:12}}>
+                  <span style={{color:T.textMuted}}>Devis signés : </span>
+                  <span style={{fontWeight:600,color:T.brand}}>{money(p.total_ttc_quotes_signed)}</span>
+                </div>}
+                {p.total_ttc_bills_signed&&<div style={{fontSize:12}}>
+                  <span style={{color:T.textMuted}}>Facturé : </span>
+                  <span style={{fontWeight:600,color:T.success}}>{money(p.total_ttc_bills_signed)}</span>
+                </div>}
+              </div>}
+            </div>
+          </div>
+        </Card>)}
+      </div>}
+  </div>;
+}
+
+// ─── Rentabilité ──────────────────────────────────────────────────
+function Rentabilite({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const q=search.toLowerCase();
+  const sorted=[...(items||[])].sort((a,b)=>new Date(b.event_date||0)-new Date(a.event_date||0));
+  const filtered=q?sorted.filter(r=>
+    (r.member||'').toLowerCase().includes(q)||
+    (r.goods_section||'').toLowerCase().includes(q)||
+    (r.status||'').toLowerCase().includes(q)||
+    (r.document_type||'').toLowerCase().includes(q)
+  ):sorted;
+
+  // Totaux
+  const totalPrice=filtered.reduce((s,r)=>s+(Number(r.sell_price)||0),0);
+  const totalMargin=filtered.reduce((s,r)=>s+(Number(r.margin)||0),0);
+  const marginPct=totalPrice>0?((totalMargin/totalPrice)*100).toFixed(1):0;
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Section, commercial, statut…"/>
+    <div style={{display:'flex',gap:8,marginBottom:12}}>
+      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+        <div style={{fontSize:11,color:T.textMuted}}>CA vendu</div>
+        <div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(totalPrice)}</div>
+      </div>
+      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+        <div style={{fontSize:11,color:T.textMuted}}>Marge</div>
+        <div style={{fontSize:14,fontWeight:700,color:T.success}}>{money(totalMargin)}</div>
+      </div>
+      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+        <div style={{fontSize:11,color:T.textMuted}}>Taux</div>
+        <div style={{fontSize:14,fontWeight:700,color:T.info}}>{marginPct}%</div>
+      </div>
+    </div>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} ligne{filtered.length>1?'s':''}</div>
+    {filtered.length===0?<Empty icon={TrendingUp} msg="Aucune donnée de rentabilité."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {filtered.map((r,i)=><Card key={i} style={{padding:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{r.goods_section||r.document_type||'—'}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap'}}>
+                {r.member&&<span>{r.member}</span>}
+                {r.event_date&&<span>{date(r.event_date)}</span>}
+              </div>
+            </div>
+            <div style={{textAlign:'right',flexShrink:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(r.sell_price)}</div>
+              <div style={{fontSize:11.5,color:Number(r.margin)>0?T.success:T.danger}}>
+                {money(r.margin)} {r.sell_price&&Number(r.sell_price)>0?`(${((Number(r.margin)/Number(r.sell_price))*100).toFixed(0)}%)`:''}
+              </div>
+            </div>
+          </div>
+          {r.status&&<div style={{marginTop:6}}><Badge label={r.status} color={r.signed?T.success:T.warning}/></div>}
+        </Card>)}
+      </div>}
+  </div>;
+}
+
+// ─── Analytics light ──────────────────────────────────────────────
+function AnalyticsLight({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const q=search.toLowerCase();
+  const sorted=[...(items||[])].sort((a,b)=>new Date(b.date_from||0)-new Date(a.date_from||0));
+  const filtered=q?sorted.filter(a=>
+    (a.product_name||'').toLowerCase().includes(q)||
+    (a.good_name||'').toLowerCase().includes(q)||
+    (a.document_type||'').toLowerCase().includes(q)
+  ):sorted;
+
+  const totalSell=filtered.reduce((s,a)=>s+(Number(a.sell_price)||0),0);
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Produit, type de document…"/>
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <span style={{fontSize:12,color:T.textMuted}}>{filtered.length} ligne{filtered.length>1?'s':''}</span>
+      <span style={{fontSize:14,fontWeight:700,color:T.brand}}>Total : {money(totalSell)}</span>
+    </div>
+    {filtered.length===0?<Empty icon={TrendingUp} msg="Aucune donnée analytics."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {filtered.map((a,i)=><Card key={i} style={{padding:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.product_name||a.good_name||'Produit'}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap'}}>
+                {a.document_type&&<Badge label={a.document_type} color={T.info}/>}
+                {a.date_from&&<span>{date(a.date_from)}</span>}
+              </div>
+            </div>
+            <div style={{textAlign:'right',flexShrink:0}}>
+              {a.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(a.sell_price)}</div>}
+              {a.price&&a.sell_price!==a.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(a.price)}</div>}
+            </div>
+          </div>
+        </Card>)}
+      </div>}
+  </div>;
+}
+
+// ─── Scheduler / Réservations ─────────────────────────────────────
+function SchedulerView({session}) {
+  const [items,setItems]=useState(null);
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+
+  const today=new Date();
+  const end=new Date(); end.setDate(end.getDate()+60);
+  const fmt=d=>d.toISOString().split('T')[0];
+
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');
+    try{
+      const d=await apiCached(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{startDate:fmt(today),endDate:fmt(end)}},d=>setItems(d?.data||[]));
+      setItems(d?.data||d||[]);
+    }catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
+  useEffect(()=>{load();},[load]);
+
+  if(loading) return <Spinner/>;
+  if(err) return <ErrBanner msg={err} onRetry={load}/>;
+
+  const flat=Array.isArray(items)?items:Object.values(items||{}).flat();
+  const q=search.toLowerCase();
+  const filtered=q?flat.filter(r=>(r.event_name||r.name||r.title||'').toLowerCase().includes(q)||(r.room_name||r.room||'').toLowerCase().includes(q)):flat;
+
+  return <div style={{padding:16}}>
+    <SearchBar value={search} onChange={setSearch} placeholder="Événement, salle…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>
+      Planning {fmt(today)} → {fmt(end)} · {filtered.length} réservation{filtered.length!==1?'s':''}
+    </div>
+    {filtered.length===0?<Empty icon={Calendar} msg="Aucune réservation sur cette période."/>:
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {filtered.map((r,i)=><Card key={i} style={{padding:14}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+            <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <Calendar size={16} color={T.brand}/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{safeStr(r.event_name||r.name||r.title||'Réservation')}</div>
+              {(r.room_name||r.room)&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><MapPin size={11}/>{safeStr(r.room_name||r.room)}</div>}
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8}}>
+                {r.start_at&&<span><Clock size={11}/> {date(r.start_at)}</span>}
+                {r.end_at&&<span>→ {date(r.end_at)}</span>}
+              </div>
+            </div>
+            {(r.status||r.status_name)&&<Badge label={safeStr(r.status||r.status_name)} color={T.brand}/>}
+          </div>
+        </Card>)}
+      </div>}
   </div>;
 }
