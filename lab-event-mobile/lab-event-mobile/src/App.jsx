@@ -438,8 +438,29 @@ function safeStr(v) {
   return String(v);
 }
 
-function QuoteDetail({quote:q, onBack}) {
+function QuoteDetail({quote:q, session, onBack}) {
+  const [lines,setLines]=useState(null);
+  const [renta,setRenta]=useState(null);
+  const [loadingLines,setLoadingLines]=useState(true);
+
+  useEffect(()=>{
+    // Load lines from vue-analytics-light filtered by document_id
+    Promise.all([
+      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+    ]).then(([analytics,rentability])=>{
+      const docId = q.id || q.quote_id;
+      if(Array.isArray(analytics)) setLines(analytics.filter(l=>String(l.document_id)===String(docId)));
+      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>String(r.document_id)===String(docId)));
+      setLoadingLines(false);
+    });
+  },[q,session]);
+
   const statusColor = /sign/i.test(q.status||'')?T.success:/rejet|annul/i.test(q.status||'')?T.danger:T.warning;
+
+  // Sections from the quote object itself (fallback)
+  const sections = Array.isArray(q.sections) ? q.sections : [];
+
   const fields = [
     {label:'Numéro', value:safeStr(q.nb||q.incremental_code)},
     {label:'Date d\'émission', value:date(q.date_of_quote||q.date)},
@@ -464,7 +485,7 @@ function QuoteDetail({quote:q, onBack}) {
         <h1 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0,flex:1}}>{q.title||q.event||'Devis'}</h1>
         {q.status&&<Badge label={q.status} color={statusColor}/>}
       </div>
-      {q.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>{q.nb}</div>}
+      {q.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{q.nb}</div>}
 
       {/* Montants */}
       <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
@@ -479,7 +500,61 @@ function QuoteDetail({quote:q, onBack}) {
         </div>)}
       </div>
 
-      {/* Détails */}
+      {/* Lignes du devis */}
+      <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>
+        Lignes {loadingLines&&<Loader2 size={12} color={T.textMuted} style={{animation:'spin 1s linear infinite',verticalAlign:'middle'}}/>}
+      </h2>
+      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+        {lines.map((l,i)=>{
+          const rLine=renta?.find(r=>r.goods_section===l.good_name||r.goods_section===l.product_name);
+          return <Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{l.product_name||l.good_name||'—'}</div>
+                {l.document_type&&<Badge label={l.document_type} color={T.info}/>}
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                {l.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(l.sell_price)}</div>}
+                {l.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(l.price)}</div>}
+                {rLine?.margin&&<div style={{fontSize:11.5,color:T.success}}>Marge : {money(rLine.margin)}</div>}
+              </div>
+            </div>
+          </Card>;
+        })}
+      </div>}
+
+      {/* Sections brutes si pas de lignes analytics */}
+      {!loadingLines&&(!lines||lines.length===0)&&sections.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+        {sections.map((s,i)=><Card key={i} style={{padding:12}}>
+          <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{safeStr(s.name||s.title||s.goods_section||`Section ${i+1}`)}</div>
+          {s.total_ht&&<div style={{fontSize:12,color:T.textMuted}}>HT : {money(s.total_ht)}</div>}
+          {s.total_ttc&&<div style={{fontSize:12,color:T.brand,fontWeight:600}}>TTC : {money(s.total_ttc)}</div>}
+        </Card>)}
+      </div>}
+
+      {!loadingLines&&(!lines||lines.length===0)&&sections.length===0&&<div style={{fontSize:12.5,color:T.textMuted,marginBottom:16,padding:'12px 0'}}>Aucune ligne disponible.</div>}
+
+      {/* Rentabilité par section */}
+      {!loadingLines&&renta&&renta.length>0&&<>
+        <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'16px 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>Rentabilité par section</h2>
+        <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+          {renta.map((r,i)=><Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,flex:1}}>{safeStr(r.goods_section)||'—'}</div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(r.sell_price)}</div>
+                <div style={{fontSize:11.5,color:Number(r.margin)>=0?T.success:T.danger}}>
+                  Marge : {money(r.margin)}
+                  {r.sell_price&&Number(r.sell_price)>0?` (${((Number(r.margin)/Number(r.sell_price))*100).toFixed(0)}%)` :''}
+                </div>
+                {r.commission&&<div style={{fontSize:11.5,color:T.info}}>Comm. : {money(r.commission)}</div>}
+              </div>
+            </div>
+          </Card>)}
+        </div>
+      </>}
+
+      {/* Infos */}
       <Card style={{marginBottom:16}}>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
@@ -487,7 +562,6 @@ function QuoteDetail({quote:q, onBack}) {
         </div>)}
       </Card>
 
-      {/* Notes */}
       {q.info&&<Card style={{padding:14}}>
         <div style={{fontSize:12,fontWeight:600,color:T.textMuted,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>Notes</div>
         <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{strip(safeStr(q.info))}</div>
@@ -504,7 +578,7 @@ function Quotes({session}) {
   const [selected,setSelected]=useState(null);
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
-  if(selected) return <QuoteDetail quote={selected} onBack={()=>setSelected(null)}/>;
+  if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
@@ -538,13 +612,114 @@ function Quotes({session}) {
   </div>;
 }
 
+function BillDetail({bill:b, session, onBack}) {
+  const [lines,setLines]=useState(null);
+  const [renta,setRenta]=useState(null);
+  const [loadingLines,setLoadingLines]=useState(true);
+
+  useEffect(()=>{
+    const docId = b.id || b.bill_id;
+    Promise.all([
+      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+    ]).then(([analytics,rentability])=>{
+      if(Array.isArray(analytics)) setLines(analytics.filter(l=>String(l.document_id)===String(docId)));
+      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>String(r.document_id)===String(docId)));
+      setLoadingLines(false);
+    });
+  },[b,session]);
+
+  const statusColor=/pay[ée]/i.test(b.status||'')?T.success:/annul/i.test(b.status||'')?T.danger:T.warning;
+  const fields=[
+    {label:'Numéro', value:safeStr(b.nb)},
+    {label:'Date facture', value:date(b.date_of_bill||b.date)},
+    {label:'Date événement', value:date(b.date_of_event)},
+    {label:'Client', value:safeStr(b.customer)},
+    {label:'Contact', value:safeStr(b.contact_name)},
+    {label:'Email', value:safeStr(b.contact_email)},
+    {label:'Téléphone', value:safeStr(b.contact_phone||b.contact_portable_phone)},
+    {label:'Événement', value:safeStr(b.event)},
+    {label:'Commercial', value:safeStr(b.owner)},
+    {label:'Chef de projet', value:safeStr(b.pm)},
+  ].filter(f=>f.value);
+
+  return <div>
+    <div style={{padding:'16px 16px 8px'}}>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
+        <ChevronLeft size={18}/> Retour
+      </button>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:4}}>
+        <h1 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0,flex:1}}>{b.title||b.event||'Facture'}</h1>
+        {b.status&&<Badge label={b.status} color={statusColor}/>}
+      </div>
+      {b.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{b.nb}</div>}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        {[
+          {label:'HT', value:money(b.total_ht), accent:T.ink},
+          {label:'TTC', value:money(b.ttc), accent:T.brand},
+          {label:'Marge', value:money(b.total_marge), accent:T.success},
+          {label:'Commission', value:money(b.total_com), accent:T.info},
+        ].filter(f=>f.value!=='—').map((f,i)=><div key={i} style={{flex:1,minWidth:80,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+          <div style={{fontSize:11,color:T.textMuted,marginBottom:2}}>{f.label}</div>
+          <div style={{fontSize:14,fontWeight:700,color:f.accent}}>{f.value}</div>
+        </div>)}
+      </div>
+      {/* Lignes */}
+      <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>
+        Lignes {loadingLines&&<Loader2 size={12} color={T.textMuted} style={{animation:'spin 1s linear infinite',verticalAlign:'middle'}}/>}
+      </h2>
+      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+        {lines.map((l,i)=><Card key={i} style={{padding:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{l.product_name||l.good_name||'—'}</div>
+              {l.document_type&&<Badge label={l.document_type} color={T.info}/>}
+            </div>
+            <div style={{textAlign:'right',flexShrink:0}}>
+              {l.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(l.sell_price)}</div>}
+              {l.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(l.price)}</div>}
+            </div>
+          </div>
+        </Card>)}
+      </div>}
+      {!loadingLines&&(!lines||lines.length===0)&&<div style={{fontSize:12.5,color:T.textMuted,marginBottom:16}}>Aucune ligne disponible.</div>}
+      {/* Rentabilité */}
+      {!loadingLines&&renta&&renta.length>0&&<>
+        <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>Rentabilité</h2>
+        <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
+          {renta.map((r,i)=><Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,flex:1}}>{safeStr(r.goods_section)||'—'}</div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(r.sell_price)}</div>
+                <div style={{fontSize:11.5,color:Number(r.margin)>=0?T.success:T.danger}}>Marge : {money(r.margin)}{r.sell_price&&Number(r.sell_price)>0?` (${((Number(r.margin)/Number(r.sell_price))*100).toFixed(0)}%)`:''}
+                </div>
+              </div>
+            </div>
+          </Card>)}
+        </div>
+      </>}
+      <Card>
+        {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+        </div>)}
+      </Card>
+    </div>
+  </div>;
+}
+
 function Bills({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [selected,setSelected]=useState(null);
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
+  if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
@@ -561,14 +736,14 @@ function Bills({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Receipt} msg={q?"Aucun résultat.":"Aucune facture."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((b,i)=><Card key={b.bill_id||i} style={{padding:14}}>
+        {filtered.map((b,i)=><Card key={b.bill_id||i} onClick={()=>setSelected(b)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.event||b.customer||'Facture'}</div>
               <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{b.nb} · {date(b.date)}</div>
               {b.contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{b.contact_name}</div>}
             </div>
-            <div style={{textAlign:'right',flexShrink:0}}>
+            <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
               <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
               {b.status&&<Badge label={b.status} color={/pay[ée]/i.test(b.status)?T.success:/annul/i.test(b.status)?T.danger:T.warning}/>}
             </div>
