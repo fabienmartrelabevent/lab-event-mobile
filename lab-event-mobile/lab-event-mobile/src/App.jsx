@@ -67,7 +67,9 @@ function SearchBar({value, onChange, placeholder}) {
       value={value}
       onChange={e=>onChange(e.target.value)}
       placeholder={placeholder||'Rechercher…'}
-      style={{width:'100%',height:40,padding:'0 36px 0 36px',border:`1px solid ${T.border}`,borderRadius:9,fontSize:13.5,color:T.ink,outline:'none',background:T.surface,boxSizing:'border-box'}}
+      style={{width:'100%',height:42,padding:'0 36px 0 36px',border:`1.5px solid ${T.borderStrong}`,borderRadius:9,fontSize:13.5,color:T.ink,outline:'none',background:T.surface,boxSizing:'border-box',boxShadow:'0 1px 3px rgba(16,24,40,0.06)'}}
+      onFocus={e=>{e.target.style.borderColor=T.brand;e.target.style.boxShadow=`0 0 0 4px rgba(0,179,181,0.12)`;}}
+      onBlur={e=>{e.target.style.borderColor=T.borderStrong;e.target.style.boxShadow='0 1px 3px rgba(16,24,40,0.06)';}}
     />
     {value&&<button onClick={()=>onChange('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center'}}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -660,11 +662,15 @@ function Contacts({session}) {
   const tabs=[{k:'companies',label:`Sociétés (${allCo.length})`},{k:'contacts',label:`Contacts (${allCu.length})`}];
 
   return <div>
-    <div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
-      {tabs.map(t=><button key={t.k} onClick={()=>{setSub(t.k);setSearch('');}} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
+    <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,position:'sticky',top:60,zIndex:5}}>
+      <div style={{display:'flex'}}>
+        {tabs.map(t=><button key={t.k} onClick={()=>{setSub(t.k);setSearch('');}} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
+      </div>
+      <div style={{padding:'8px 16px 10px'}}>
+        <SearchBar value={search} onChange={setSearch} placeholder={sub==='companies'?'Nom société, ville…':'Nom, email, poste…'}/>
+      </div>
     </div>
-    <div style={{padding:16}}>
-      <SearchBar value={search} onChange={setSearch} placeholder={sub==='companies'?'Nom société, ville…':'Nom, email, poste…'}/>
+    <div style={{padding:'8px 16px 16px'}}>
       {sub==='companies'&&<>
         <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filteredCo.length} société{filteredCo.length>1?'s':''}{q?` sur ${allCo.length}`:''}</div>
         {filteredCo.length===0?<Empty icon={Building2} msg={q?'Aucun résultat.':'Aucune société.'}/>:
