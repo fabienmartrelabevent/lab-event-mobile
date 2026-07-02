@@ -19,14 +19,35 @@ const T = {
 
 // ─── API ─────────────────────────────────────────────────────────
 const PROXY = 'https://lab-event-proxy.vercel.app';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes avant rafraîchissement silencieux
+const CACHE_MAX = 30 * 60 * 1000; // 30 minutes max (force refresh)
 
 function buildSubdomain(s) {
   return s.trim().replace(/^https?:\/\//,'').replace(/\.lab-event\.com.*$/,'').replace(/\/$/,'');
 }
 
+// ─── Cache localStorage ──────────────────────────────────────────
+function cacheKey(subdomain, path) {
+  return `le_cache_${subdomain}_${path.replace(/[^a-z0-9]/gi,'_')}`;
+}
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    return { data, age: Date.now() - ts };
+  } catch { return null; }
+}
+function cacheSet(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+function cacheClear(subdomain) {
+  try {
+    Object.keys(localStorage).filter(k=>k.startsWith(`le_cache_${subdomain}`)).forEach(k=>localStorage.removeItem(k));
+  } catch {}
+}
+
 async function api(subdomain, token, path, { method='GET', body }={}) {
-  // For GET requests, append per_page as query param
-  // For POST analytics requests, inject per_page in body
   let finalPath = path;
   if (method === 'GET') {
     const sep = path.includes('?') ? '&' : '?';
@@ -50,6 +71,46 @@ async function api(subdomain, token, path, { method='GET', body }={}) {
   if (!res.ok) throw new Error(data?.error || data?.message || `${res.status}`);
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+// apiCached : retourne le cache immédiatement, rafraîchit en arrière-plan si besoin
+async function apiCached(subdomain, token, path, opts={}, onRefresh) {
+  const key = cacheKey(subdomain, path + JSON.stringify(opts.body||''));
+  const cached = cacheGet(key);
+
+  if (cached && cached.age < CACHE_MAX) {
+    // Retourne le cache tout de suite
+    if (cached.age > CACHE_TTL && onRefresh) {
+      // Rafraîchit silencieusement en arrière-plan
+      api(subdomain, token, path, opts).then(fresh => {
+        cacheSet(key, fresh);
+        onRefresh(fresh);
+      }).catch(()=>{});
+    }
+    return cached.data;
+  }
+  // Pas de cache ou expiré : fetch normal
+  const fresh = await api(subdomain, token, path, opts);
+  cacheSet(key, fresh);
+  return fresh;
+}
+
+async function fetchAllPagesCached(subdomain, token, basePath, onRefresh) {
+  const key = cacheKey(subdomain, 'allpages_' + basePath);
+  const cached = cacheGet(key);
+
+  if (cached && cached.age < CACHE_MAX) {
+    if (cached.age > CACHE_TTL && onRefresh) {
+      fetchAllPages(subdomain, token, basePath).then(fresh => {
+        cacheSet(key, fresh);
+        onRefresh(fresh);
+      }).catch(()=>{});
+    }
+    return cached.data;
+  }
+  const fresh = await fetchAllPages(subdomain, token, basePath);
+  cacheSet(key, fresh);
+  return fresh;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -270,7 +331,7 @@ function Events({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await api(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -308,7 +369,7 @@ function Planning({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await api(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -424,7 +485,7 @@ function Quotes({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [selected,setSelected]=useState(null);
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(selected) return <QuoteDetail quote={selected} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
@@ -465,7 +526,7 @@ function Bills({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -505,7 +566,7 @@ function Payments({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -546,7 +607,7 @@ function Activites({session}) {
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
 
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{}});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -701,8 +762,8 @@ function Contacts({session}) {
     setLoading(true);setErr('');
     try{
       const [co,cu]=await Promise.all([
-        fetchAllPages(session.subdomain,session.token,'/v3/customer-company'),
-        fetchAllPages(session.subdomain,session.token,'/v3/customers'),
+        fetchAllPagesCached(session.subdomain,session.token,'/v3/customer-company',d=>{setCompanies(d)}),
+        fetchAllPagesCached(session.subdomain,session.token,'/v3/customers',d=>{setCustomers(d)}),
       ]);
       setCompanies(co);
       setCustomers(cu);
@@ -837,12 +898,40 @@ function QuickCreateModal({session,onClose,onSuccess}) {
 
 // ─── App Shell ───────────────────────────────────────────────────
 export default function App() {
-  const [session,setSession]=useState(null);
+  const [session,setSession]=useState(()=>{
+    try {
+      const s = localStorage.getItem('le_session');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  });
   const [tab,setTab]=useState('dashboard');
   const [showCreate,setShowCreate]=useState(false);
   const [eventDetail,setEventDetail]=useState(null);
 
-  if(!session) return <Login onLogin={setSession}/>;
+  const handleLogin = s => {
+    try { localStorage.setItem('le_session', JSON.stringify(s)); } catch {}
+    setSession(s);
+    // Prefetch toutes les données en arrière-plan dès la connexion
+    const endpoints = [
+      {path:'/v3/analytics/events', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/finance-documents/quotes', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/finance-documents/bills', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/bill-prepayments', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/activity', opts:{method:'POST',body:{}}},
+      {path:'/v3/analytics/events/vue-planning', opts:{method:'POST',body:{}}},
+    ];
+    endpoints.forEach(({path,opts})=>apiCached(s.subdomain,s.token,path,opts).catch(()=>{}));
+    fetchAllPagesCached(s.subdomain,s.token,'/v3/customer-company').catch(()=>{});
+    fetchAllPagesCached(s.subdomain,s.token,'/v3/customers').catch(()=>{});
+  };
+
+  const handleLogout = () => {
+    if(session) cacheClear(session.subdomain);
+    try { localStorage.removeItem('le_session'); } catch {}
+    setSession(null);
+  };
+
+  if(!session) return <Login onLogin={handleLogin}/>;
 
   const tabs=[
     {k:'dashboard',label:'Aperçu',icon:LayoutDashboard},
@@ -862,7 +951,7 @@ export default function App() {
         <button onClick={()=>setShowCreate(true)} style={{width:34,height:34,borderRadius:9,background:T.brand,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(0,179,181,0.3)'}}>
           <Plus size={18} color="#fff" strokeWidth={2.5}/>
         </button>
-        <button onClick={()=>setSession(null)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center',gap:4,fontSize:12}}>
+        <button onClick={handleLogout} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,display:'flex',alignItems:'center',gap:4,fontSize:12}}>
           <LogOut size={15}/>
         </button>
       </div>
