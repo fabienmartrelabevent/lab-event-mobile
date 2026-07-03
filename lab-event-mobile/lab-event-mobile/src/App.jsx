@@ -408,10 +408,21 @@ function EventDetail({event, onBack, session}) {
   const [schedulerLoading,setSchedulerLoading]=useState(false);
   const [schedulerErr,setSchedulerErr]=useState('');
 
+  const relatedActivities = (() => {
+    try {
+      const k = Object.keys(localStorage).find(k => k.includes('activity'));
+      const evName = (event.event_name||'').toLowerCase();
+      return k ? JSON.parse(localStorage.getItem(k)).data
+        .filter(a => (a.event_name||'').toLowerCase()===evName)
+        .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)) : [];
+    } catch { return []; }
+  })();
+
   const docTabs = [
     {k:'devis', label:`Devis (${relatedQuotes.length})`},
     {k:'factures', label:`Factures (${relatedBills.length})`},
     {k:'paiements', label:`Paiements (${relatedPayments.length})`},
+    {k:'activites', label:`Activités (${relatedActivities.length})`},
     {k:'planning', label:'Planning'},
   ];
 
@@ -529,6 +540,29 @@ function EventDetail({event, onBack, session}) {
               <div style={{textAlign:'right',flexShrink:0}}>
                 <div style={{fontSize:13.5,fontWeight:700,color:T.success}}>{money(p.prepayment_amount)}</div>
                 {p.remaining_balance!=null&&<div style={{fontSize:11,color:T.textMuted}}>Reste : {money(p.remaining_balance)}</div>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+
+      {/* Activités */}
+      {docTab==='activites'&&(relatedActivities.length===0
+        ?<Empty icon={Activity} msg="Aucune activité pour cet événement."/>
+        :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relatedActivities.map((a,i)=><Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.success,marginTop:5,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
+                  {a.status&&<Badge label={a.status} color={T.info}/>}
+                </div>
+                {a.corporation_client_name&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:2}}>{a.corporation_client_name}</div>}
+                {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,120)}{strip(a.comment).length>120?'…':''}</div>}
+                <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
+                  {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.textSubtle}}>{a.deadline_is_expired?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
+                </div>
               </div>
             </div>
           </Card>)}
@@ -1074,7 +1108,7 @@ function Payments({session}) {
 }
 
 // ─── Activités ───────────────────────────────────────────────────
-function Activites({session}) {
+function Activites({session, onEventClick, onCompanyClick}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -1132,9 +1166,19 @@ function Activites({session}) {
                 {a.client_contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{a.client_contact_name}{a.client_contact_email?` · ${a.client_contact_email}`:''}</div>}
                 {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4,marginTop:2}}><Calendar size={11}/>{a.event_name}</div>}
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:6,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:8}}>{strip(a.comment).slice(0,120)}{strip(a.comment).length>120?'…':''}</div>}
-                {(a.event_link||a.corporation_client_link)&&<div style={{display:'flex',gap:6,marginTop:6}}>
-                  {a.event_link&&<a href={a.event_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,color:T.brand,textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px'}}>Voir événement</a>}
-                  {a.corporation_client_link&&<a href={a.corporation_client_link} target="_blank" rel="noopener noreferrer" style={{fontSize:11.5,color:T.secondary,textDecoration:'none',border:`1px solid ${T.secondary}`,borderRadius:6,padding:'3px 8px'}}>Voir client</a>}
+                {(a.event_name||a.corporation_client_name)&&<div style={{display:'flex',gap:6,marginTop:6}}>
+                  {a.event_name&&onEventClick&&<button onClick={()=>{
+                    const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')||k.includes('BIG')||true&&k.includes('events')&&!k.includes('vue')&&!k.includes('planning'));
+                    const evts=k?JSON.parse(localStorage.getItem(k)||'{}')?.data||[]:[];
+                    const ev=evts.find(e=>e.event_name===a.event_name);
+                    if(ev) onEventClick(ev); else if(a.event_link) window.open(a.event_link,'_blank');
+                  }} style={{fontSize:11.5,color:T.brand,background:'none',textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir événement</button>}
+                  {a.corporation_client_name&&onCompanyClick&&<button onClick={()=>{
+                    const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
+                    const cos=k?JSON.parse(localStorage.getItem(k)||'{}')?.data||[]:[];
+                    const co=cos.find(c=>(c.name||'').toLowerCase()===(a.corporation_client_name||'').toLowerCase());
+                    if(co) onCompanyClick(co); else if(a.corporation_client_link) window.open(a.corporation_client_link,'_blank');
+                  }} style={{fontSize:11.5,color:T.secondary,background:'none',textDecoration:'none',border:`1px solid ${T.secondary}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir client</button>}
                 </div>}
                 <div style={{display:'flex',gap:10,marginTop:6,fontSize:11,color:T.textSubtle,flexWrap:'wrap'}}>
                   {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
@@ -1166,58 +1210,155 @@ async function fetchAllPages(subdomain, token, basePath) {
 }
 
 // ─── Company Detail ───────────────────────────────────────────────
-function CompanyDetail({company, allCustomers, onBack}) {
+function CompanyDetail({company, allCustomers, session, onBack}) {
+  const [tab, setTab] = useState('contacts');
   const linked = allCustomers.filter(c =>
     c.company?.id === company.id ||
     c.company?.name?.toLowerCase() === (company.name||'').toLowerCase()
   );
+  const coName = (company.name||'').toLowerCase();
+
+  // Load related data from cache
+  const relEvents = (() => { try {
+    const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
+    return k?JSON.parse(localStorage.getItem(k)).data.filter(e=>(e.company_name||e.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];
+  } catch{return [];} })();
+
+  const relQuotes = (() => { try {
+    const k=Object.keys(localStorage).find(k=>k.includes('quotes'));
+    return k?JSON.parse(localStorage.getItem(k)).data.filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];
+  } catch{return [];} })();
+
+  const relBills = (() => { try {
+    const k=Object.keys(localStorage).find(k=>k.includes('bills'));
+    return k?JSON.parse(localStorage.getItem(k)).data.filter(b=>(b.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+  } catch{return [];} })();
+
+  const relActivities = (() => { try {
+    const k=Object.keys(localStorage).find(k=>k.includes('activity'));
+    return k?JSON.parse(localStorage.getItem(k)).data.filter(a=>(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+  } catch{return [];} })();
+
+  const tabs=[
+    {k:'contacts',label:`Contacts (${linked.length})`},
+    {k:'events',label:`Événements (${relEvents.length})`},
+    {k:'docs',label:`Devis/Fact. (${relQuotes.length+relBills.length})`},
+    {k:'activities',label:`Activités (${relActivities.length})`},
+  ];
 
   return <div>
     <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+company.country:''}`} onBack={onBack}/>
-    <div style={{padding:'20px 16px 24px'}}>
-
-      <Card style={{marginBottom:16}}>
+    <div style={{padding:'16px 16px 8px'}}>
+      <Card style={{marginBottom:12}}>
         {[
           {label:'Ville', value:company.city},
           {label:'Pays', value:company.country},
-          {label:'Code postal', value:company.data?.postal_code},
           {label:'SIRET', value:company.data?.nb_siret},
           {label:'N° TVA', value:company.data?.tva_number},
-          {label:'Service', value:company.data?.service},
-        ].filter(f=>f.value).map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+        ].filter(f=>f.value).map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'10px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted}}>{f.label}</span>
-          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink}}>{f.value}</span>
         </div>)}
       </Card>
+    </div>
 
-      <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 10px'}}>
-        Contacts liés ({linked.length})
-      </h2>
-      {linked.length===0
-        ? <Empty icon={UserRound} msg="Aucun contact lié à cette société."/>
-        : <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {linked.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
-              <div style={{display:'flex',alignItems:'center',gap:12}}>
-                <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                  <UserRound size={16} color={T.info}/>
-                </div>
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{[c.civility,c.name,c.last_name].filter(Boolean).join(' ')||'Sans nom'}</div>
-                  {c.position&&<div style={{fontSize:12,color:T.textMuted}}>{c.position}</div>}
-                  <div style={{display:'flex',gap:10,marginTop:4,flexWrap:'wrap'}}>
-                    {c.email&&<a href={`mailto:${c.email}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Mail size={11}/>{c.email}</a>}
-                    {(c.mobile||c.phone)&&<a href={`tel:${c.mobile||c.phone}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Phone size={11}/>{c.mobile||c.phone}</a>}
-                  </div>
+    {/* Onglets */}
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7,overflowX:'auto'}}>
+      {tabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{flexShrink:0,background:'none',border:'none',cursor:'pointer',padding:'10px 10px',fontSize:11.5,fontWeight:tab===t.k?600:400,color:tab===t.k?T.brand:T.textMuted,borderBottom:tab===t.k?`2px solid ${T.brand}`:'2px solid transparent',whiteSpace:'nowrap'}}>{t.label}</button>)}
+    </div>
+
+    <div style={{padding:'12px 16px 32px'}}>
+      {/* Contacts */}
+      {tab==='contacts'&&(linked.length===0?<Empty icon={UserRound} msg="Aucun contact lié."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {linked.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{[c.civility==='1'?'Mme':c.civility==='2'?'M.':c.civility,c.name,c.last_name].filter(Boolean).join(' ')||'Sans nom'}</div>
+                {c.position&&<div style={{fontSize:12,color:T.textMuted}}>{c.position}</div>}
+                <div style={{display:'flex',gap:10,marginTop:4,flexWrap:'wrap'}}>
+                  {c.email&&<a href={`mailto:${c.email}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Mail size={11}/>{c.email}</a>}
+                  {(c.mobile||c.phone)&&<a href={`tel:${c.mobile||c.phone}`} style={{fontSize:12,color:T.brand,display:'flex',alignItems:'center',gap:3,textDecoration:'none'}}><Phone size={11}/>{c.mobile||c.phone}</a>}
                 </div>
               </div>
-            </Card>)}
-          </div>}
+            </div>
+          </Card>)}
+        </div>)}
+
+      {/* Événements */}
+      {tab==='events'&&(relEvents.length===0?<Empty icon={Calendar} msg="Aucun événement lié."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relEvents.map((ev,i)=><Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ev.event_name}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8}}>
+                  <span>{date(ev.events_date_from)}</span>
+                  {ev.number_of_persons&&<span><Users size={11}/> {ev.number_of_persons}</span>}
+                </div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                {ev.quotes_sell_price_sign&&<div style={{fontSize:13,fontWeight:700,color:T.success}}>{money(ev.quotes_sell_price_sign)}</div>}
+                {ev.win_lost&&<Badge label={ev.win_lost} color={ev.win_lost==='Gagné'?T.success:ev.win_lost==='Perdu'?T.danger:T.warning}/>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+
+      {/* Devis & Factures */}
+      {tab==='docs'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {relQuotes.length===0&&relBills.length===0&&<Empty icon={FileText} msg="Aucun document lié."/>}
+        {relQuotes.map((q,i)=><Card key={`q${i}`} style={{padding:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12.5,fontWeight:600,color:T.ink}}>{q.title||q.event||q.nb}</div>
+              <div style={{fontSize:11.5,color:T.textMuted}}>{q.nb} · {date(q.date_of_quote)}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(q.ttc)}</div>
+              {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
+            </div>
+          </div>
+        </Card>)}
+        {relBills.map((b,i)=><Card key={`b${i}`} style={{padding:12,borderLeft:`3px solid ${T.info}`}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12.5,fontWeight:600,color:T.ink}}>{b.event||b.nb} <Badge label="Facture" color={T.info}/></div>
+              <div style={{fontSize:11.5,color:T.textMuted}}>{b.nb} · {date(b.date)}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
+              {b.status&&<Badge label={b.status} color={/pay/i.test(b.status)?T.success:T.warning}/>}
+            </div>
+          </div>
+        </Card>)}
+      </div>}
+
+      {/* Activités */}
+      {tab==='activities'&&(relActivities.length===0?<Empty icon={Activity} msg="Aucune activité liée."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relActivities.map((a,i)=><Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.success,marginTop:5,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
+                {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><Calendar size={11}/>{a.event_name}</div>}
+                {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,100)}{strip(a.comment).length>100?'…':''}</div>}
+                <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
+                  {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.textSubtle}}>{a.deadline_is_expired?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
+                </div>
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
     </div>
   </div>;
 }
 
 // ─── Contacts ────────────────────────────────────────────────────
-function Contacts({session}) {
+function Contacts({session, initialCompany, onConsumeInitial}) {
   const [companies,setCompanies]=useState(null);
   const [customers,setCustomers]=useState(null);
   const [err,setErr]=useState('');
@@ -1225,6 +1366,14 @@ function Contacts({session}) {
   const [sub,setSub]=useState('companies');
   const [search,setSearch]=useState('');
   const [selectedCompany,setSelectedCompany]=useState(null);
+
+  // Handle navigation from Activities "Voir client"
+  useEffect(()=>{
+    if(initialCompany&&onConsumeInitial){
+      setSelectedCompany(initialCompany);
+      onConsumeInitial();
+    }
+  },[initialCompany]);
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -1242,7 +1391,7 @@ function Contacts({session}) {
   if(loading) return <div style={{padding:16}}><Spinner/><p style={{textAlign:'center',fontSize:12,color:T.textMuted}}>Chargement de tous les contacts…</p></div>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} onBack={()=>setSelectedCompany(null)}/>;
+  if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} session={session} onBack={()=>setSelectedCompany(null)}/>;
 
   const q=search.toLowerCase();
   const allCo=companies||[];
@@ -1592,6 +1741,7 @@ export default function App() {
   const [tab,setTab]=useState('dashboard');
   const [showCreate,setShowCreate]=useState(false);
   const [eventDetail,setEventDetail]=useState(null);
+  const [companyDetailOverride,setCompanyDetailOverride]=useState(null);
   const [drawerOpen,setDrawerOpen]=useState(false);
 
   // Helper to prefetch all data for a session
@@ -1716,8 +1866,8 @@ export default function App() {
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)}/>:<Events session={session}/>)}
       {tab==='finances'&&<Finances session={session}/>}
-      {tab==='activites'&&<Activites session={session}/>}
-      {tab==='contacts'&&<Contacts session={session}/>}
+      {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
+      {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
       {tab==='planning'&&<Planning session={session}/>}
       {tab==='prestataires'&&<Prestataires session={session}/>}
       {tab==='rentabilite'&&<Rentabilite session={session}/>}
