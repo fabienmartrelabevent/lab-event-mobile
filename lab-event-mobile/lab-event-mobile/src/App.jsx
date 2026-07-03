@@ -357,7 +357,7 @@ function BackHeader({title, subtitle, onBack, badge}) {
 }
 
 // ─── Event Detail ────────────────────────────────────────────────
-function EventDetail({event, onBack}) {
+function EventDetail({event, onBack, session}) {
   const [docTab, setDocTab] = useState('devis');
   const wl=event.win_lost;
   const wlColor=wl==='Gagné'?T.success:wl==='Perdu'?T.danger:T.warning;
@@ -571,8 +571,7 @@ function Events({session}) {
   },[session]);
   useEffect(()=>{load();},[load]);
 
-  if(selected) return <EventDetail event={selected} onBack={()=>setSelected(null)}/>;
-  if(loading) return <Spinner/>;
+  if(selected) return <EventDetail event={selected} session={session} onBack={()=>setSelected(null)}/>;  if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
@@ -1700,7 +1699,7 @@ export default function App() {
     {/* Content */}
     <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
-      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} onBack={()=>setEventDetail(null)}/>:<Events session={session}/>)}
+      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)}/>:<Events session={session}/>)}
       {tab==='finances'&&<Finances session={session}/>}
       {tab==='activites'&&<Activites session={session}/>}
       {tab==='contacts'&&<Contacts session={session}/>}
