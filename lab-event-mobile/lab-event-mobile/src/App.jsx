@@ -1744,8 +1744,9 @@ function Rentabilite({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  // Filtre signé
-  const base=(items||[]).filter(r=>signedOnly?r.signed:true);
+  // Filtre signé — uniquement les statuts commençant par "Signé" (Signé par le client, Signé électroniquement...)
+  const isSignedDoc = r => /^sign[ée]/i.test((r.status||'').trim());
+  const base=(items||[]).filter(r=>signedOnly?isSignedDoc(r):true);
 
   // Agréger par goods_section
   const bySection={};
