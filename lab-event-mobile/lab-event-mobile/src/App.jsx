@@ -357,7 +357,7 @@ function BackHeader({title, subtitle, onBack, badge}) {
 }
 
 // ─── Event Detail ────────────────────────────────────────────────
-function EventDetail({event, onBack, session}) {
+function EventDetail({event, onBack, session, onCompanyClick}) {
   const [docTab, setDocTab] = useState('devis');
   const wl=event.win_lost;
   const wlColor=wl==='Gagné'?T.success:wl==='Perdu'?T.danger:T.warning;
@@ -407,6 +407,7 @@ function EventDetail({event, onBack, session}) {
   const [schedulerData,setSchedulerData]=useState(null);
   const [schedulerLoading,setSchedulerLoading]=useState(false);
   const [schedulerErr,setSchedulerErr]=useState('');
+  const [selectedDoc,setSelectedDoc]=useState(null); // {type:'quote'|'bill', data}
 
   const relatedActivities = (() => {
     try {
@@ -453,6 +454,9 @@ function EventDetail({event, onBack, session}) {
       .finally(()=>setSchedulerLoading(false));
   },[docTab, event, session]);
 
+  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onEventClick={ev=>{setSelectedDoc(null);}} />;
+  if(selectedDoc?.type==='bill') return <BillDetail bill={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
+
   return <div>
     <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
     <div style={{padding:'20px 16px 8px'}}>
@@ -477,6 +481,7 @@ function EventDetail({event, onBack, session}) {
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {(f.label==='Email'&&f.value&&f.value!=='null')?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
           :(f.label==='Téléphone'&&f.value&&f.value!=='null')?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+          :f.label==='Société'?<button onClick={()=>{const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));const cos=k?JSON.parse(localStorage.getItem(k))?.data||[]:[];const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());if(co&&onCompanyClick)onCompanyClick(co);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0}}>{safeStr(f.value)}</button>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
@@ -492,7 +497,7 @@ function EventDetail({event, onBack, session}) {
       {docTab==='devis'&&(relatedQuotes.length===0
         ?<Empty icon={FileText} msg="Aucun devis pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {relatedQuotes.map((q,i)=><Card key={i} style={{padding:14}}>
+          {relatedQuotes.map((q,i)=><Card key={i} onClick={()=>setSelectedDoc({type:'quote',data:q})} style={{padding:14}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
               <div style={{minWidth:0,flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{q.title||q.nb||'Devis'}</div>
@@ -510,7 +515,7 @@ function EventDetail({event, onBack, session}) {
       {docTab==='factures'&&(relatedBills.length===0
         ?<Empty icon={Receipt} msg="Aucune facture pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {relatedBills.map((b,i)=><Card key={i} style={{padding:14}}>
+          {relatedBills.map((b,i)=><Card key={i} onClick={()=>setSelectedDoc({type:'bill',data:b})} style={{padding:14}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
               <div style={{minWidth:0,flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{b.title||b.nb||'Facture'}</div>
@@ -617,7 +622,8 @@ function Events({session}) {
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
   const [search,setSearch]=useState('');
-  const [pipeline,setPipeline]=useState(''); // ← doit être avant tout return conditionnel
+  const [pipeline,setPipeline]=useState('');
+  const [datePeriod,setDatePeriod]=useState('');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -626,13 +632,14 @@ function Events({session}) {
   },[session]);
   useEffect(()=>{load();},[load]);
 
-  if(selected) return <EventDetail event={selected} session={session} onBack={()=>setSelected(null)}/>;  if(loading) return <Spinner/>;
+  if(selected) return <EventDetail event={selected} session={session} onBack={()=>setSelected(null)} onCompanyClick={undefined}/>;  if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
   const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
-  const filtered=sorted.filter(e=>{
+  const byDate=applyDateFilter(sorted,'events_date_from',datePeriod);
+  const filtered=byDate.filter(e=>{
     const mQ=!q||(e.event_name||'').toLowerCase().includes(q)||(e.customer||'').toLowerCase().includes(q)||(e.company_name||'').toLowerCase().includes(q)||(e.contact_name||'').toLowerCase().includes(q)||(e.status_name||'').toLowerCase().includes(q)||(e.place||'').toLowerCase().includes(q);
     const mP=!pipeline||e.win_lost===pipeline;
     return mQ&&mP;
@@ -640,11 +647,12 @@ function Events({session}) {
 
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, client, lieu…"/>
+    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
     {pipelines.length>0&&<div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
       <button onClick={()=>setPipeline('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!pipeline?T.brand:T.border}`,background:!pipeline?T.brandTint:'none',color:!pipeline?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!pipeline?600:400}}>Tous</button>
       {pipelines.map(p=><button key={p} onClick={()=>setPipeline(p===pipeline?'':p)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${pipeline===p?T.brand:T.border}`,background:pipeline===p?T.brandTint:'none',color:pipeline===p?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:pipeline===p?600:400}}>{p}</button>)}
     </div>}
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{(q||pipeline)?` sur ${sorted.length}`:''}</div>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{(q||pipeline||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucun événement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>setSelected(ev)}/>)}
@@ -726,7 +734,8 @@ function applyDateFilter(items, dateField, period) {
   if (!period) return items;
   const now = new Date();
   let from;
-  if (period==='month') from=new Date(now.getFullYear(),now.getMonth(),1);
+  if (period==='12m') from=new Date(now.getFullYear()-1,now.getMonth(),now.getDate());
+  else if (period==='month') from=new Date(now.getFullYear(),now.getMonth(),1);
   else if (period==='quarter') from=new Date(now.getFullYear(),Math.floor(now.getMonth()/3)*3,1);
   else if (period==='year') from=new Date(now.getFullYear(),0,1);
   return items.filter(i=>i[dateField]&&new Date(i[dateField])>=from);
@@ -890,6 +899,15 @@ function QuoteDetail({quote:q, session, onBack}) {
         <div style={{fontSize:12,fontWeight:600,color:T.textMuted,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>Notes</div>
         <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{strip(safeStr(q.info))}</div>
       </Card>}
+      {/* Lien vers l'événement */}
+      {(q.event||q.event_name)&&onEventClick&&<button onClick={()=>{
+        const evName=(q.event||q.event_name||'').toLowerCase();
+        const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
+        const ev=k?JSON.parse(localStorage.getItem(k)).data.find(e=>(e.event_name||'').toLowerCase()===evName):null;
+        if(ev) onEventClick(ev);
+      }} style={{width:'100%',marginTop:12,padding:'12px 16px',borderRadius:10,border:`1px solid ${T.brand}`,background:T.brandSubtle,color:T.brand,fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+        <Calendar size={15}/> Voir l'événement : {q.event||q.event_name}
+      </button>}
     </div>
   </div>;
 }
@@ -1105,7 +1123,7 @@ function Payments({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} paiement{filtered.length>1?'s':''}{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={CreditCard} msg={q?"Aucun résultat.":"Aucun paiement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
+        {filtered.map((p,i)=><Card key={p.id||i} onClick={()=>setSelected(p)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{p.bill_number||'Paiement'}</div>
@@ -1135,9 +1153,10 @@ function Activites({session, onEventClick, onCompanyClick}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const all=items||[];
-  const expired=all.filter(a=>a.deadline_is_expired);
-  const soon=all.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
+  const allRaw=items||[];
+  const all=applyDateFilter(allRaw,'date_from',period);
+  const expired=all.filter(a=>a.deadline_is_expired===true||(a.deadline_is_expired&&a.deadline_is_expired!==false));
+  const soon=all.filter(a=>a.deadline_is_soon_expired&&!a.deadline_is_expired);
 
   const q=search.toLowerCase();
   const bySorted=[...all].sort((a,b)=>new Date(b.date||b.deadline||0)-new Date(a.date||a.deadline||0));
@@ -1227,6 +1246,16 @@ async function fetchAllPages(subdomain, token, basePath) {
 // ─── Company Detail ───────────────────────────────────────────────
 function CompanyDetail({company, allCustomers, session, onBack}) {
   const [tab, setTab] = useState('contacts');
+  const [details, setDetails] = useState(null);
+
+  useEffect(()=>{
+    // Load full company details from API
+    api(session.subdomain,session.token,`/v3/customer-company/${company.id}`).then(d=>{
+      setDetails(d?.data||d||null);
+    }).catch(()=>{});
+  },[company.id,session]);
+
+  const co = details || company; // Use API details if available
   const linked = allCustomers.filter(c =>
     c.company?.id === company.id ||
     c.company?.name?.toLowerCase() === (company.name||'').toLowerCase()
@@ -1266,11 +1295,17 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
     <div style={{padding:'16px 16px 8px'}}>
       <Card style={{marginBottom:12}}>
         {[
-          {label:'Ville', value:company.city},
-          {label:'Pays', value:company.country},
-          {label:'SIRET', value:company.data?.nb_siret},
-          {label:'N° TVA', value:company.data?.tva_number},
-        ].filter(f=>f.value).map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'10px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          {label:'Ville', value:co.city||co.address?.city},
+          {label:'Code postal', value:co.address?.zipcode},
+          {label:'Pays', value:co.country||co.address?.country?.replace('country.','')},
+          {label:'Adresse', value:co.address?.street_1},
+          {label:'Site web', value:co.web_site},
+          {label:'SIRET', value:co.finance?.siret||co.data?.nb_siret},
+          {label:'N° TVA', value:co.finance?.tva_number||co.data?.tva_number},
+          {label:'Service', value:co.finance?.service||co.data?.service},
+          {label:'Type', value:co.type_name},
+          {label:'Langue', value:co.company_language},
+        ].filter(f=>f.value&&f.value!=='null'&&safeStr(f.value)).map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'10px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted}}>{f.label}</span>
           <span style={{fontSize:13,fontWeight:500,color:T.ink}}>{f.value}</span>
         </div>)}
@@ -1381,6 +1416,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
   const [sub,setSub]=useState('companies');
   const [search,setSearch]=useState('');
   const [selectedCompany,setSelectedCompany]=useState(null);
+  const [selectedContact,setSelectedContact]=useState(null);
 
   // Handle navigation from Activities "Voir client"
   useEffect(()=>{
@@ -1406,6 +1442,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
   if(loading) return <div style={{padding:16}}><Spinner/><p style={{textAlign:'center',fontSize:12,color:T.textMuted}}>Chargement de tous les contacts…</p></div>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
+  if(selectedContact) return <ContactDetail contact={selectedContact} session={session} onBack={()=>setSelectedContact(null)} onCompanyClick={co=>{setSelectedContact(null);setSelectedCompany(co);}}/>;  
   if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} session={session} onBack={()=>setSelectedCompany(null)}/>;
 
   const q=search.toLowerCase();
@@ -1425,7 +1462,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
         <SearchBar value={search} onChange={setSearch} placeholder={sub==='companies'?'Nom société, ville…':'Nom, email, poste…'}/>
       </div>
     </div>
-    <div style={{padding:'8px 16px 16px'}}>
+    <div style={{padding:'12px 16px 16px'}}>
       {sub==='companies'&&<>
         <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filteredCo.length} société{filteredCo.length>1?'s':''}{q?` sur ${allCo.length}`:''}</div>
         {filteredCo.length===0?<Empty icon={Building2} msg={q?'Aucun résultat.':'Aucune société.'}/>:
@@ -1446,7 +1483,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
         <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filteredCu.length} contact{filteredCu.length>1?'s':''}{q?` sur ${allCu.length}`:''}</div>
         {filteredCu.length===0?<Empty icon={UserRound} msg={q?'Aucun résultat.':'Aucun contact.'}/>:
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {filteredCu.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+            {filteredCu.map((c,i)=><Card key={c.id||i} onClick={()=>setSelectedContact(c)} style={{padding:14}}>
               <div style={{display:'flex',alignItems:'center',gap:12}}>
                 <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
                 <div style={{minWidth:0,flex:1}}>
@@ -1879,7 +1916,7 @@ export default function App() {
     {/* Content */}
     <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
-      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)}/>:<Events session={session}/>)}
+      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events session={session}/>)}
       {tab==='finances'&&<Finances session={session}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
       {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
@@ -1904,11 +1941,60 @@ export default function App() {
 }
 
 // ─── Prestataires ─────────────────────────────────────────────────
+
+// ─── PartnerDetail ────────────────────────────────────────────────
+function PartnerDetail({partner, session, onBack}) {
+  const [details, setDetails] = useState(null);
+  useEffect(()=>{
+    if(!partner.id) return;
+    api(session.subdomain, session.token, `/v3/customer-company/${partner.id}`)
+      .then(d=>setDetails(d?.data||d||null)).catch(()=>{});
+  },[partner.id, session]);
+  const p = details || partner;
+
+  const fields = [
+    {label:'Type', value:p.type_name||p.company_type},
+    {label:'Ville', value:p.city||(p.address?.city)},
+    {label:'Pays', value:p.country||(p.address?.country?.replace('country.',''))},
+    {label:'Adresse', value:p.address?.street_1},
+    {label:'Site web', value:p.web_site},
+    {label:'Email', value:p.finance?.contact?.email, link:`mailto:${p.finance?.contact?.email}`},
+    {label:'Téléphone', value:p.finance?.contact?.phone, link:`tel:${p.finance?.contact?.phone}`},
+    {label:'SIRET', value:p.finance?.siret},
+    {label:'Langue', value:p.company_language},
+  ].filter(f=>f.value&&f.value!=='null'&&safeStr(f.value));
+
+  return <div>
+    <BackHeader title={p.name||'Prestataire'} subtitle={p.city} onBack={onBack}/>
+    <div style={{padding:'20px 16px 32px'}}>
+      {/* Montants */}
+      {(partner.total_ttc_quotes_signed||partner.total_ttc_bills_signed)&&<div style={{display:'flex',gap:8,marginBottom:16}}>
+        {partner.total_ttc_quotes_signed&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Devis signés</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:T.brand}}>{money(partner.total_ttc_quotes_signed)}</div>
+        </div>}
+        {partner.total_ttc_bills_signed&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Facturé</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:T.success}}>{money(partner.total_ttc_bills_signed)}</div>
+        </div>}
+      </div>}
+      <Card>
+        {fields.map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
+          {f.link?<a href={f.link} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{safeStr(f.value)}</a>
+          :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
+        </div>)}
+      </Card>
+    </div>
+  </div>;
+}
+
 function Prestataires({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [selected,setSelected]=useState(null);
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -1929,7 +2015,7 @@ function Prestataires({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} prestataire{filtered.length>1?'s':''}</div>
     {filtered.length===0?<Empty icon={Briefcase} msg="Aucun prestataire."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
+        {filtered.map((p,i)=><Card key={p.id||i} onClick={()=>setSelected(p)} style={{padding:14}}>
           <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
             <div style={{width:36,height:36,borderRadius:9,background:`${T.secondary}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <Briefcase size={16} color={T.secondary}/>
@@ -1962,8 +2048,9 @@ function Rentabilite({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
-  const [signedOnly,setSignedOnly]=useState(true); // filtre signé par défaut
+  const [signedOnly,setSignedOnly]=useState(true);
   const [search,setSearch]=useState('');
+  const [period,setPeriod]=useState('year');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -1975,9 +2062,10 @@ function Rentabilite({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  // Filtre signé — uniquement les statuts commençant par "Signé" (Signé par le client, Signé électroniquement...)
+  // Filtre signé + période
   const isSignedDoc = r => /^sign[ée]/i.test((r.status||'').trim());
-  const base=(items||[]).filter(r=>signedOnly?isSignedDoc(r):true);
+  const byPeriod=applyDateFilter(items||[],'event_date',period);
+  const base=byPeriod.filter(r=>signedOnly?isSignedDoc(r):true);
 
   // Agréger par goods_section
   const bySection={};
@@ -2001,6 +2089,10 @@ function Rentabilite({session}) {
   const totalRate=totalCA>0?((totalMargin/totalCA)*100).toFixed(1):0;
 
   return <div style={{padding:16}}>
+    {/* Filtre période */}
+    <div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
+      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trimestre'},{k:'year',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'6px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+    </div>
     {/* Filtre signé */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
       {[{k:true,label:'Signés uniquement'},{k:false,label:'Tous les documents'}].map(o=><button key={String(o.k)} onClick={()=>setSignedOnly(o.k)} style={{flex:1,padding:'7px 8px',borderRadius:8,border:`1.5px solid ${signedOnly===o.k?T.brand:T.border}`,background:signedOnly===o.k?T.brandTint:'none',color:signedOnly===o.k?T.brand:T.textMuted,fontSize:12,fontWeight:signedOnly===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
@@ -2061,7 +2153,8 @@ function AnalyticsLight({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [filterSection,setFilterSection]=useState('');
-  const [sortBy,setSortBy]=useState('ca'); // 'ca' | 'count'
+  const [sortBy,setSortBy]=useState('ca');
+  const [period,setPeriod]=useState('year');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -2073,7 +2166,8 @@ function AnalyticsLight({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const all=items||[];
+  const allRaw=items||[];
+  const all=applyDateFilter(allRaw,'date_from',period);
 
   // Agréger par good_name
   const byArticle={};
@@ -2102,11 +2196,15 @@ function AnalyticsLight({session}) {
   const maxCA=articles[0]?.ca||1;
 
   return <div style={{padding:16}}>
-    {/* Filtre section */}
-    {sections.length>0&&<div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
-      <button onClick={()=>setFilterSection('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!filterSection?T.brand:T.border}`,background:!filterSection?T.brandTint:'none',color:!filterSection?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!filterSection?600:400}}>Tout</button>
-      {sections.map(s=><button key={s} onClick={()=>setFilterSection(s===filterSection?'':s)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${filterSection===s?T.brand:T.border}`,background:filterSection===s?T.brandTint:'none',color:filterSection===s?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:filterSection===s?600:400}}>{s}</button>)}
-    </div>}
+    {/* Filtre période */}
+    <div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
+      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trim.'},{k:'year',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+    </div>
+    {/* Filtre section — liste déroulante */}
+    {sections.length>0&&<select value={filterSection} onChange={e=>setFilterSection(e.target.value)} style={{width:'100%',minHeight:40,padding:'0 12px',marginBottom:10,border:`1.5px solid ${T.border}`,borderRadius:8,fontSize:13.5,color:T.ink,background:T.surface,outline:'none',boxSizing:'border-box'}}>
+      <option value="">Toutes les sections ({sections.length})</option>
+      {sections.map(s=><option key={s} value={s}>{s}</option>)}
+    </select>}
 
     <SearchBar value={search} onChange={setSearch} placeholder="Nom d'article ou section…"/>
 
@@ -2170,16 +2268,20 @@ function SchedulerView({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const flat=Array.isArray(items)?items:Object.values(items||{}).flat();
+  // Scheduler returns {rows:[...]} - flatten and normalize
+  const flatRaw=Array.isArray(items)?items:Array.isArray(items?.rows)?items.rows:Object.values(items||{}).flat();
   const q=search.toLowerCase();
-  const filtered=q?flat.filter(r=>(r.event_name||r.name||r.title||'').toLowerCase().includes(q)||(r.room_name||r.room||'').toLowerCase().includes(q)):flat;
+  const filtered=q?flatRaw.filter(r=>(r.event_name||r.name||r.title||'').toLowerCase().includes(q)||(r.product_real_name||r.room_name||r.room||'').toLowerCase().includes(q)):flatRaw;
 
   return <div style={{padding:16}}>
+    <div style={{background:`${T.info}0d`,border:`1px solid ${T.info}22`,borderRadius:8,padding:'10px 12px',marginBottom:10,fontSize:12,color:T.info,lineHeight:1.5}}>
+      📅 Réservations actives du {fmt(today)} au {fmt(end)}. Ces données viennent du scheduler Lab-event en temps réel.
+    </div>
     <SearchBar value={search} onChange={setSearch} placeholder="Événement, salle…"/>
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>
-      Planning {fmt(today)} → {fmt(end)} · {filtered.length} réservation{filtered.length!==1?'s':''}
+      {filtered.length} réservation{filtered.length!==1?'s':''}
     </div>
-    {filtered.length===0?<Empty icon={Calendar} msg="Aucune réservation sur cette période."/>:
+    {filtered.length===0?<Empty icon={Calendar} msg={`Aucune réservation${q?' trouvée':' sur cette période'}.`}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((r,i)=><Card key={i} style={{padding:14}}>
           <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
@@ -2202,12 +2304,57 @@ function SchedulerView({session}) {
 }
 
 // ─── Articles / Goods ─────────────────────────────────────────────
+
+// ─── ArticleDetail ────────────────────────────────────────────────
+function ArticleDetail({article: a, onBack}) {
+  const fields = [
+    {label:'Section', value:a.section},
+    {label:'Référence', value:a.reference||a.code},
+    {label:'Prix unitaire HT', value:money(a.price)},
+    {label:'Prix de vente HT', value:money(a.sell_price)},
+    {label:'Unité', value:a.unit},
+    {label:'TVA', value:a.vat_rate!=null?`${a.vat_rate}%`:null},
+    {label:'Taux marge', value:a.margin_rate!=null?`${a.margin_rate}%`:null},
+    {label:'Commission', value:a.commission_rate!=null?`${a.commission_rate}%`:null},
+    {label:'Actif', value:a.active===false?'Non':'Oui'},
+    {label:'Sans prix', value:a.without_price?'Oui':null},
+  ].filter(f=>f.value&&f.value!=='null');
+
+  return <div>
+    <BackHeader title={a.name||'Article'} subtitle={a.section} onBack={onBack}/>
+    <div style={{padding:'20px 16px 32px'}}>
+      {/* Prix cards */}
+      {(a.price||a.sell_price)&&<div style={{display:'flex',gap:8,marginBottom:16}}>
+        {a.sell_price&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Prix de vente HT</div>
+          <div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(a.sell_price)}</div>
+        </div>}
+        {a.margin_rate&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Taux marge</div>
+          <div style={{fontSize:14,fontWeight:700,color:T.success}}>{a.margin_rate}%</div>
+        </div>}
+        {a.vat_rate&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>TVA</div>
+          <div style={{fontSize:14,fontWeight:700,color:T.info}}>{a.vat_rate}%</div>
+        </div>}
+      </div>}
+      <Card>
+        {fields.map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+          <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
+          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+        </div>)}
+      </Card>
+    </div>
+  </div>;
+}
+
 function Articles({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [filterSection,setFilterSection]=useState('');
+  const [selected,setSelected]=useState(null);
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -2216,6 +2363,7 @@ function Articles({session}) {
   },[session]);
   useEffect(()=>{load();},[load]);
 
+  if(selected) return <ArticleDetail article={selected} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
@@ -2238,7 +2386,7 @@ function Articles({session}) {
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} article{filtered.length>1?'s':''}</div>
     {filtered.length===0?<Empty icon={FileText} msg="Aucun article."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((a,i)=><Card key={a.id||i} style={{padding:14}}>
+        {filtered.map((a,i)=><Card key={a.id||i} onClick={()=>setSelected(a)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.name||'Article'}</div>
@@ -2326,5 +2474,91 @@ function PlanningByDay({session}) {
           </div>
         </div>)}
       </div>}
+  </div>;
+}
+
+// ─── ContactDetail ───────────────────────────────────────────────
+function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
+  const [tab,setTab]=useState('infos');
+  const coName=(c.company?.name||'').toLowerCase();
+  const cName=[c.name,c.last_name].filter(Boolean).join(' ').toLowerCase();
+
+  const relEvents=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue'));return k?JSON.parse(localStorage.getItem(k)).data.filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];}catch{return [];}};
+  const relQuotes=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('quotes'));return k?JSON.parse(localStorage.getItem(k)).data.filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];}catch{return [];}};
+  const relActivities=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('activity'));return k?JSON.parse(localStorage.getItem(k)).data.filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];}catch{return [];}};
+
+  const evts=relEvents(); const quotes=relQuotes(); const acts=relActivities();
+
+  const civLabel=c.civility==='1'?'Mme':c.civility==='2'?'M.':c.civility||'';
+  const fullName=[civLabel,c.name,c.last_name].filter(Boolean).join(' ');
+
+  const tabs=[{k:'infos',label:'Infos'},{k:'events',label:`Événements (${evts.length})`},{k:'docs',label:`Devis (${quotes.length})`},{k:'activities',label:`Activités (${acts.length})`}];
+
+  return <div>
+    <BackHeader title={fullName||'Contact'} subtitle={c.position||c.company?.name} onBack={onBack}/>
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7}}>
+      {tabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 4px',fontSize:11,fontWeight:tab===t.k?600:400,color:tab===t.k?T.brand:T.textMuted,borderBottom:tab===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
+    </div>
+    <div style={{padding:'12px 16px 32px'}}>
+      {tab==='infos'&&<>
+        <Card style={{marginBottom:12}}>
+          {[
+            {label:'Email',value:c.email,link:`mailto:${c.email}`},
+            {label:'Mobile',value:c.mobile,link:`tel:${c.mobile}`},
+            {label:'Téléphone',value:c.phone,link:`tel:${c.phone}`},
+            {label:'Poste',value:c.position},
+            {label:'Société',value:c.company?.name,onClick:()=>{if(c.company&&onCompanyClick)onCompanyClick(c.company);}},
+            {label:'Standard',value:c.standard},
+          ].filter(f=>f.value&&f.value!=='null').map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
+            <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
+            {f.link?<a href={f.link} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+            :f.onClick?<button onClick={f.onClick} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:500,color:T.brand,padding:0}}>{f.value}</button>
+            :<span style={{fontSize:13,fontWeight:500,color:T.ink}}>{f.value}</span>}
+          </div>)}
+        </Card>
+      </>}
+      {tab==='events'&&(evts.length===0?<Empty icon={Calendar} msg="Aucun événement lié."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {evts.map((ev,i)=><Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ev.event_name}</div>
+                <div style={{fontSize:12,color:T.textMuted}}>{date(ev.events_date_from)} · {ev.number_of_persons||'—'} pers.</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                {ev.quotes_sell_price_sign&&<div style={{fontSize:13,fontWeight:700,color:T.success}}>{money(ev.quotes_sell_price_sign)}</div>}
+                {ev.win_lost&&<Badge label={ev.win_lost} color={ev.win_lost==='Gagné'?T.success:ev.win_lost==='Perdu'?T.danger:T.warning}/>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+      {tab==='docs'&&(quotes.length===0?<Empty icon={FileText} msg="Aucun devis lié."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {quotes.map((q,i)=><Card key={i} style={{padding:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{q.title||q.event||q.nb}</div>
+                <div style={{fontSize:11.5,color:T.textMuted}}>{q.nb} · {date(q.date_of_quote)}</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:13,fontWeight:700}}>{money(q.ttc)}</div>
+                {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+      {tab==='activities'&&(acts.length===0?<Empty icon={Activity} msg="Aucune activité liée."/>:
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {acts.map((a,i)=><Card key={i} style={{padding:12}}>
+            <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
+            {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><Calendar size={11}/>{a.event_name}</div>}
+            {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,100)}</div>}
+            <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8}}>
+              {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
+              {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:T.textSubtle}}>Échéance: {date(a.deadline)}</span>}
+            </div>
+          </Card>)}
+        </div>)}
+    </div>
   </div>;
 }
