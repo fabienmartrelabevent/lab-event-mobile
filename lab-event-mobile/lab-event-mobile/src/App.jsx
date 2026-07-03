@@ -426,38 +426,31 @@ function EventDetail({event, onBack, session}) {
     {k:'planning', label:'Planning'},
   ];
 
-  // Load scheduler when tab is selected
+  // Load planning from vue-planning (cache first, then API) filtered by incremental_code
   useEffect(()=>{
     if(docTab!=='planning'||schedulerData!==null||schedulerLoading) return;
     setSchedulerLoading(true);setSchedulerErr('');
-    // Use event dates ±3 days to capture montage/démontage
-    const d1=new Date(event.events_date_from||new Date());
-    const d2=new Date(event.events_date_to||event.events_date_from||new Date());
-    d1.setDate(d1.getDate()-7); d2.setDate(d2.getDate()+7);
-    const fmt=d=>d.toISOString().split('T')[0];
-    // Ne pas filtrer par event_id côté serveur (format incertain)
-    // On utilise la plage de dates + filtre client par nom d'event
-    const body={startDate:fmt(d1), endDate:fmt(d2)};
-    api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body}).then(d=>{
-      // Response structure: {rows: [...]} or [{...}] or {data: {room: [...]}}
-      let flat=[];
-      if(Array.isArray(d)) flat=d;
-      else if(Array.isArray(d?.rows)) flat=d.rows;
-      else if(d?.data&&Array.isArray(d.data)) flat=d.data;
-      else if(d?.data&&typeof d.data==='object') flat=Object.values(d.data).flat();
-      else if(typeof d==='object'&&d!==null) {
-        // Try all values to find arrays of objects
-        const vals=Object.values(d).filter(v=>Array.isArray(v));
-        if(vals.length>0) flat=vals.flat();
-      }
-      // Client-side filter by event_name as fallback
-      if(flat.length>0&&event.event_name){
-        const evName=(event.event_name||'').toLowerCase().trim();
-        const byEvent=flat.filter(r=>(r.event_name||'').toLowerCase().trim()===evName);
-        flat=byEvent.length>0?byEvent:flat;
-      }
-      setSchedulerData(flat);
-    }).catch(e=>setSchedulerErr(e.message)).finally(()=>setSchedulerLoading(false));
+    const code=String(event.incremental_code||'');
+    const evName=(event.event_name||'').toLowerCase().trim();
+    const filterFn=r=>
+      (code&&String(r.incremental_code)===code)||
+      (evName&&(r.event_name||'').toLowerCase().trim()===evName);
+    // Try cache first (vue-planning is prefetched on login)
+    const cKey=Object.keys(localStorage).find(k=>k.includes('vue_planning')&&!k.includes('by_day'));
+    if(cKey){
+      try{
+        const cached=JSON.parse(localStorage.getItem(cKey))?.data||[];
+        const filtered=cached.filter(filterFn).sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0));
+        setSchedulerData(filtered);
+        setSchedulerLoading(false);
+        return;
+      }catch{}
+    }
+    // Cache miss → fetch fresh
+    api(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans()}})
+      .then(d=>{const all=Array.isArray(d)?d:[];setSchedulerData(all.filter(filterFn).sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0)));})
+      .catch(e=>setSchedulerErr(e.message))
+      .finally(()=>setSchedulerLoading(false));
   },[docTab, event, session]);
 
   return <div>
@@ -580,26 +573,35 @@ function EventDetail({event, onBack, session}) {
         :(!schedulerData||schedulerData.length===0)?<Empty icon={Calendar} msg="Aucune réservation de salle trouvée pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
           {schedulerData.map((r,i)=>{
-            const room=r.product_real_name||r.room_name||r.room||r.name||r.title||r.product||'—';
-            const start=r.start_at?r.start_at.substring(0,16).replace('T',' '):(r.startDate||r.start||'—');
-            const end=r.end_at?r.end_at.substring(0,16).replace('T',' '):(r.endDate||r.end||'');
-            const evName=r.event_name||r.eventName||r.name||'';
+            const room=r.product_real_name||r.room_reservation||r.room_name||r.name||'—';
+            const hasAssembly=r.assembly_client_enabled||r.assembly_intern_enabled;
+            const hasDisassembly=r.disassembly_client_enabled||r.disassembly_intern_enabled;
             return <Card key={i} style={{padding:14}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:hasAssembly||hasDisassembly?8:0}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{room}</div>
-                  <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:6,flexWrap:'wrap'}}>
-                    <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{start}</span>
-                    {end&&end!==start&&<span>→ {end}</span>}
+                  <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:8,flexWrap:'wrap'}}>
+                    {r.start_at&&<span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{r.start_at.substring(0,16).replace('T',' ')}</span>}
+                    {r.end_at&&r.end_at!==r.start_at&&<span>→ {r.end_at.substring(11,16)}</span>}
+                    {r.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{r.number_of_persons}</span>:null}
                   </div>
-                  {evName&&evName!==room&&<div style={{fontSize:12,color:T.brand,marginTop:2}}>{evName}</div>}
-                  {(r.customer_name||r.company_name)&&<div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{r.customer_name||r.company_name}</div>}
                 </div>
-                <div style={{display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end',flexShrink:0}}>
-                  {(r.status_name||r.status)&&<Badge label={r.status_name||r.status} color={r.status_color||T.brand}/>}
-                  {r.total_goods!=null&&r.total_goods>0&&<div style={{fontSize:10.5,color:T.textMuted}}>{r.total_goods} prestation{r.total_goods>1?'s':''}</div>}
-                </div>
+                {r.status_name&&<Badge label={r.status_name} color={r.status_color||T.brand}/>}
               </div>
+              {/* Montage / Démontage */}
+              {hasAssembly&&<div style={{fontSize:11.5,color:T.info,marginTop:6,display:'flex',gap:6,flexWrap:'wrap'}}>
+                <span style={{fontWeight:600}}>Montage :</span>
+                {r.assembly_date_start_client&&<span>{r.assembly_date_start_client.substring(0,10)}</span>}
+                {r.assembly_date_start_intern&&<span>(int. {r.assembly_date_start_intern.substring(0,10)})</span>}
+              </div>}
+              {hasDisassembly&&<div style={{fontSize:11.5,color:T.warning,marginTop:3,display:'flex',gap:6,flexWrap:'wrap'}}>
+                <span style={{fontWeight:600}}>Démontage :</span>
+                {r.disassembly_date_start_client&&<span>{r.disassembly_date_start_client.substring(0,10)}</span>}
+              </div>}
+              {(r.comment||r.room_configuration)&&<div style={{fontSize:11.5,color:T.textMuted,marginTop:4}}>
+                {r.room_configuration&&<span>Config : {r.room_configuration} · </span>}
+                {r.comment&&strip(r.comment).slice(0,80)}
+              </div>}
             </Card>;
           })}
         </div>
