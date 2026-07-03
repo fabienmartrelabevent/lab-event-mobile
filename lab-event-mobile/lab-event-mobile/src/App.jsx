@@ -418,17 +418,28 @@ function EventDetail({event, onBack, session}) {
   // Load scheduler when tab is selected
   useEffect(()=>{
     if(docTab!=='planning'||schedulerData!==null||schedulerLoading) return;
-    if(!event.event_id) return;
     setSchedulerLoading(true);setSchedulerErr('');
     // Use event dates ±3 days to capture montage/démontage
     const d1=new Date(event.events_date_from||new Date());
     const d2=new Date(event.events_date_to||event.events_date_from||new Date());
     d1.setDate(d1.getDate()-3); d2.setDate(d2.getDate()+3);
     const fmt=d=>d.toISOString().split('T')[0];
-    api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{
-      startDate:fmt(d1), endDate:fmt(d2), event_id:String(event.event_id)
-    }}).then(d=>{
-      const flat=Array.isArray(d)?d:(d?.data?Object.values(d.data).flat():[]);
+    const body={startDate:fmt(d1), endDate:fmt(d2)};
+    // Pass event_id in both formats - API accepts either UUID or numeric id
+    if(event.event_id) { body.event_id=String(event.event_id); body.eventId=String(event.event_id); }
+    api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body}).then(d=>{
+      // Flatten response (can be array or object with nested arrays)
+      let flat=[];
+      if(Array.isArray(d)) flat=d;
+      else if(d?.data) flat=Array.isArray(d.data)?d.data:Object.values(d.data).flat();
+      else if(typeof d==='object') flat=Object.values(d).flat().filter(x=>x&&typeof x==='object');
+      // Client-side filter by event_name as fallback (case-insensitive)
+      if(flat.length>0&&event.event_name){
+        const evName=(event.event_name||'').toLowerCase().trim();
+        const byEvent=flat.filter(r=>(r.event_name||'').toLowerCase().trim()===evName);
+        // Use filtered results only if we got matches; otherwise show all in date range
+        flat=byEvent.length>0?byEvent:flat;
+      }
       setSchedulerData(flat);
     }).catch(e=>setSchedulerErr(e.message)).finally(()=>setSchedulerLoading(false));
   },[docTab, event, session]);
