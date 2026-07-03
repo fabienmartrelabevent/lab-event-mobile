@@ -433,11 +433,11 @@ function EventDetail({event, onBack, session}) {
     // Use event dates ±3 days to capture montage/démontage
     const d1=new Date(event.events_date_from||new Date());
     const d2=new Date(event.events_date_to||event.events_date_from||new Date());
-    d1.setDate(d1.getDate()-3); d2.setDate(d2.getDate()+3);
+    d1.setDate(d1.getDate()-7); d2.setDate(d2.getDate()+7);
     const fmt=d=>d.toISOString().split('T')[0];
+    // Ne pas filtrer par event_id côté serveur (format incertain)
+    // On utilise la plage de dates + filtre client par nom d'event
     const body={startDate:fmt(d1), endDate:fmt(d2)};
-    // Pass event_id in both formats - API accepts either UUID or numeric id
-    if(event.event_id) { body.event_id=String(event.event_id); body.eventId=String(event.event_id); }
     api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body}).then(d=>{
       // Response structure: {rows: [...]} or [{...}] or {data: {room: [...]}}
       let flat=[];
