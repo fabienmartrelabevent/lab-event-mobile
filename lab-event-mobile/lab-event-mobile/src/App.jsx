@@ -404,11 +404,34 @@ function EventDetail({event, onBack}) {
     } catch { return []; }
   })().sort((a,b) => new Date(b.prepayment_date||0) - new Date(a.prepayment_date||0));
 
+  const [schedulerData,setSchedulerData]=useState(null);
+  const [schedulerLoading,setSchedulerLoading]=useState(false);
+  const [schedulerErr,setSchedulerErr]=useState('');
+
   const docTabs = [
     {k:'devis', label:`Devis (${relatedQuotes.length})`},
     {k:'factures', label:`Factures (${relatedBills.length})`},
     {k:'paiements', label:`Paiements (${relatedPayments.length})`},
+    {k:'planning', label:'Planning'},
   ];
+
+  // Load scheduler when tab is selected
+  useEffect(()=>{
+    if(docTab!=='planning'||schedulerData!==null||schedulerLoading) return;
+    if(!event.event_id) return;
+    setSchedulerLoading(true);setSchedulerErr('');
+    // Use event dates ±3 days to capture montage/démontage
+    const d1=new Date(event.events_date_from||new Date());
+    const d2=new Date(event.events_date_to||event.events_date_from||new Date());
+    d1.setDate(d1.getDate()-3); d2.setDate(d2.getDate()+3);
+    const fmt=d=>d.toISOString().split('T')[0];
+    api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{
+      startDate:fmt(d1), endDate:fmt(d2), event_id:String(event.event_id)
+    }}).then(d=>{
+      const flat=Array.isArray(d)?d:(d?.data?Object.values(d.data).flat():[]);
+      setSchedulerData(flat);
+    }).catch(e=>setSchedulerErr(e.message)).finally(()=>setSchedulerLoading(false));
+  },[docTab, event, session]);
 
   return <div>
     <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
@@ -499,6 +522,35 @@ function EventDetail({event, onBack}) {
             </div>
           </Card>)}
         </div>)}
+
+      {/* Planning / Scheduler */}
+      {docTab==='planning'&&(
+        schedulerLoading?<div style={{textAlign:'center',padding:32}}><Loader2 size={20} color={T.brand} style={{animation:'spin 1s linear infinite'}}/></div>
+        :schedulerErr?<ErrBanner msg={schedulerErr}/>
+        :!event.event_id?<Empty icon={Calendar} msg="Identifiant d'événement non disponible."/>
+        :(!schedulerData||schedulerData.length===0)?<Empty icon={Calendar} msg="Aucune réservation de salle trouvée pour cet événement."/>
+        :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {schedulerData.map((r,i)=>{
+            const room=r.product_real_name||r.room_name||r.room||'—';
+            const start=r.start_at?r.start_at.substring(0,16).replace('T',' '):'—';
+            const end=r.end_at?r.end_at.substring(0,16).replace('T',' '):'';
+            return <Card key={i} style={{padding:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{room}</div>
+                  <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{start}</span>
+                    {end&&end!==start&&<span>→ {end}</span>}
+                  </div>
+                  {(r.customer_name||r.company_name)&&<div style={{fontSize:12,color:T.brand,marginTop:2}}>{r.customer_name||r.company_name}</div>}
+                </div>
+                {(r.status_name||r.status)&&<Badge label={r.status_name||r.status} color={r.status_color||T.brand}/>}
+              </div>
+              {r.total_goods!=null&&r.total_goods>0&&<div style={{fontSize:11.5,color:T.textMuted,marginTop:6}}>{r.total_goods} prestation{r.total_goods>1?'s':''}</div>}
+            </Card>;
+          })}
+        </div>
+      )}
     </div>
   </div>;
 }
