@@ -34,7 +34,7 @@ function cacheKey(subdomain, path) {
   return `le_cache_${subdomain}_${path.replace(/[^a-z0-9]/gi,'_')}`;
 }
 // Endpoints volumineux → mémoire uniquement
-const BIG_PATHS = ['analytics_events','vue_analytics_light','rentability','planning_by_day','partner_companies'];
+const BIG_PATHS = ['analytics_events','rentability','planning_by_day','partner_companies'];
 function isBig(key) { return BIG_PATHS.some(p => key.includes(p)); }
 
 function cacheGet(key) {
@@ -764,13 +764,15 @@ function QuoteDetail({quote:q, session, onBack}) {
 
   useEffect(()=>{
     // Load lines from vue-analytics-light filtered by document_id
+    // Try BOTH id and quote_id since the API uses different IDs internally
     Promise.all([
       apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
       apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
     ]).then(([analytics,rentability])=>{
-      const docId = q.id || q.quote_id;
-      if(Array.isArray(analytics)) setLines(analytics.filter(l=>String(l.document_id)===String(docId)));
-      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>String(r.document_id)===String(docId)));
+      const docIds=new Set([String(q.id),String(q.quote_id)].filter(Boolean));
+      if(Array.isArray(analytics)) setLines(analytics.filter(l=>docIds.has(String(l.document_id))));
+      const rentaIds=new Set([String(q.id),String(q.quote_id)].filter(Boolean));
+      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>rentaIds.has(String(r.document_id))));
       setLoadingLines(false);
     });
   },[q,session]);
@@ -839,7 +841,7 @@ function QuoteDetail({quote:q, session, onBack}) {
           <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
             <div style={{fontSize:13,fontWeight:500,color:T.ink}}>
               Ligne {i+1}
-              {(s.col_1||s.col_2)&&<span style={{fontSize:11,color:T.textSubtle,marginLeft:6}}>{safeStr(s.col_1)} {safeStr(s.col_2)}</span>}
+
             </div>
             <div style={{textAlign:'right',flexShrink:0}}>
               {Number(s.sellPrice)>0&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(s.sellPrice)}</div>}
@@ -938,13 +940,13 @@ function BillDetail({bill:b, session, onBack}) {
   const [loadingLines,setLoadingLines]=useState(true);
 
   useEffect(()=>{
-    const docId = b.id || b.bill_id;
+    const billDocIds=new Set([String(b.id),String(b.bill_id)].filter(Boolean));
     Promise.all([
       apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
       apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
     ]).then(([analytics,rentability])=>{
-      if(Array.isArray(analytics)) setLines(analytics.filter(l=>String(l.document_id)===String(docId)));
-      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>String(r.document_id)===String(docId)));
+      if(Array.isArray(analytics)) setLines(analytics.filter(l=>billDocIds.has(String(l.document_id))));
+      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>billDocIds.has(String(r.document_id))));
       setLoadingLines(false);
     });
   },[b,session]);
