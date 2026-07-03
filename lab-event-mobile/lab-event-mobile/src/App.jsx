@@ -1149,33 +1149,65 @@ function SuccessScreen({msg,onClose}) {
 }
 
 // ─── Create Event Form ─────────────────────────────────────────────
-function CreateEventForm({session,onDone}) {
+function CreateEventForm({session, onDone}) {
   const [name,setName]=useState('');
   const [dateFrom,setDateFrom]=useState('');
   const [dateTo,setDateTo]=useState('');
   const [persons,setPersons]=useState('');
-  const [notes,setNotes]=useState('');
+  const [description,setDescription]=useState('');
   const [loading,setLoading]=useState(false);
   const [err,setErr]=useState('');
+  // Customer search
+  const [customerSearch,setCustomerSearch]=useState('');
+  const [selectedCustomer,setSelectedCustomer]=useState(null);
 
-  const submit=async()=>{
-    if(!name.trim()){setErr("Le nom de l'événement est requis.");return;}
-    setLoading(true);setErr('');
-    try{
-      await api(session.subdomain,session.token,'/v3/events/quick/create',{method:'POST',body:{
-        event_name:name.trim(),
-        date_from:dateFrom||undefined,
-        date_to:dateTo||undefined,
-        number_of_persons:persons?parseInt(persons):undefined,
-        notes:notes||undefined,
-      }});
+  // Load contacts from cache
+  const allCustomers = (() => {
+    try {
+      const k = Object.keys(localStorage).find(k => k.includes('allpages') && k.includes('customers'));
+      return k ? (JSON.parse(localStorage.getItem(k))?.data || []) : [];
+    } catch { return []; }
+  })();
+  const filteredCustomers = customerSearch && !selectedCustomer
+    ? allCustomers.filter(c => [c.name,c.last_name,c.email].filter(Boolean).join(' ').toLowerCase().includes(customerSearch.toLowerCase())).slice(0,6)
+    : [];
+
+  const submit = async () => {
+    if (!name.trim()) { setErr("Le nom de l'événement est requis."); return; }
+    setLoading(true); setErr('');
+    try {
+      await api(session.subdomain, session.token, '/v3/events/quick/create', {
+        method: 'POST',
+        body: {
+          event_name: name.trim(),
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+          number_of_persons: persons ? parseInt(persons) : undefined,
+          description: description || undefined,
+          customer_id: selectedCustomer?.id || undefined,
+        }
+      });
       onDone();
-    }catch(e){setErr(e.message);}finally{setLoading(false);}
+    } catch(e) { setErr(e.message); } finally { setLoading(false); }
   };
 
   return <>
     <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nom de l'événement *</label>
     <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: Séminaire direction 2026" style={inp}/>
+
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Contact client</label>
+    <input value={customerSearch} onChange={e=>{setCustomerSearch(e.target.value);setSelectedCustomer(null);}} placeholder="Nom, prénom ou email…" style={inp}/>
+    {filteredCustomers.length>0&&<div style={{border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden',marginTop:-10,marginBottom:14}}>
+      {filteredCustomers.map((c,i)=><button key={c.id||i} onClick={()=>{setSelectedCustomer(c);setCustomerSearch([c.name,c.last_name].filter(Boolean).join(' '));}} style={{width:'100%',padding:'9px 14px',background:'none',border:'none',borderBottom:i<filteredCustomers.length-1?`1px solid ${T.border}`:'none',cursor:'pointer',textAlign:'left',fontSize:13,color:'#1b283f',display:'flex',flexDirection:'column',gap:2}}>
+        <span style={{fontWeight:500}}>{[c.name,c.last_name].filter(Boolean).join(' ')||'—'}</span>
+        {c.email&&<span style={{fontSize:11.5,color:'#80808f'}}>{c.email}</span>}
+      </button>)}
+    </div>}
+    {selectedCustomer&&<div style={{background:`${T.brandTint}`,border:`1px solid ${T.brandLight}`,borderRadius:8,padding:'8px 12px',marginBottom:14,fontSize:12.5,color:T.brandStrong,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <span>✓ {[selectedCustomer.name,selectedCustomer.last_name].filter(Boolean).join(' ')}</span>
+      <button onClick={()=>{setSelectedCustomer(null);setCustomerSearch('');}} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:16,lineHeight:1}}>×</button>
+    </div>}
+
     <div style={{display:'flex',gap:10,marginBottom:0}}>
       <div style={{flex:1}}>
         <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Date début</label>
@@ -1186,10 +1218,13 @@ function CreateEventForm({session,onDone}) {
         <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inp}/>
       </div>
     </div>
+
     <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Nombre de personnes</label>
     <input type="number" value={persons} onChange={e=>setPersons(e.target.value)} placeholder="Ex: 50" style={inp}/>
-    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Notes</label>
-    <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Informations complémentaires…" style={{...inp,padding:'10px 12px',resize:'none',height:'auto'}}/>
+
+    <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Description</label>
+    <textarea value={description} onChange={e=>setDescription(e.target.value)} rows={2} placeholder="Description du projet…" style={{...inp,padding:'10px 12px',resize:'none',height:'auto'}}/>
+
     {err&&<div style={{display:'flex',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:T.danger}}><AlertCircle size={16}/><span>{err}</span></div>}
     <button onClick={submit} disabled={loading} style={{width:'100%',minHeight:44,borderRadius:8,border:'none',background:T.brand,color:'#fff',fontSize:14,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:4}}>
       {loading&&<Loader2 size={16} style={{animation:'spin 1s linear infinite'}}/>}{loading?'Création…':"Créer l'événement"}
