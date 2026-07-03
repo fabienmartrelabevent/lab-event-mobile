@@ -341,6 +341,20 @@ function EventRow({event,onClick}) {
   </Card>;
 }
 
+// ─── Sticky back header ──────────────────────────────────────────
+function BackHeader({title, subtitle, onBack, badge}) {
+  return <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'0 16px',position:'sticky',top:60,zIndex:8,display:'flex',alignItems:'center',gap:10,minHeight:48}}>
+    <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:600,flexShrink:0,padding:'10px 0'}}>
+      <ChevronLeft size={18}/> Retour
+    </button>
+    {title&&<div style={{flex:1,minWidth:0,overflow:'hidden'}}>
+      <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{title}</div>
+      {subtitle&&<div style={{fontSize:11,color:T.textMuted}}>{subtitle}</div>}
+    </div>}
+    {badge&&<div style={{flexShrink:0}}>{badge}</div>}
+  </div>;
+}
+
 // ─── Event Detail ────────────────────────────────────────────────
 function EventDetail({event,onBack}) {
   const wl=event.win_lost;
@@ -365,16 +379,10 @@ function EventDetail({event,onBack}) {
   ].filter(f=>f.value);
 
   return <div>
-    <div style={{display:'flex',alignItems:'center',gap:12,padding:'16px 16px 8px'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
-        <ChevronLeft size={18}/> Retour
-      </button>
-    </div>
-    <div style={{padding:'0 16px 16px'}}>
-      <h1 style={{fontSize:17,fontWeight:700,color:T.ink,margin:'0 0 6px'}}>{event.event_name||'Événement'}</h1>
+    <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
+    <div style={{padding:'16px 16px 0'}}>
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
         {event.status_name&&<Badge label={event.status_name} color={T.brand}/>}
-        {wl&&<Badge label={wl} color={wlColor}/>}
       </div>
       {/* CA Cards */}
       <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
@@ -583,17 +591,8 @@ function QuoteDetail({quote:q, session, onBack}) {
   ].filter(f=>f.value);
 
   return <div>
-    <div style={{padding:'16px 16px 8px'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
-        <ChevronLeft size={18}/> Retour
-      </button>
-    </div>
-    <div style={{padding:'0 16px 16px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:4}}>
-        <h1 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0,flex:1}}>{q.title||q.event||'Devis'}</h1>
-        {q.status&&<Badge label={q.status} color={statusColor}/>}
-      </div>
-      {q.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{q.nb}</div>}
+    <BackHeader title={q.title||q.event||'Devis'} subtitle={q.nb} onBack={onBack} badge={q.status?<Badge label={q.status} color={statusColor}/>:null}/>
+    <div style={{padding:'16px 16px 0'}}>
 
       {/* Montants */}
       <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
@@ -685,7 +684,7 @@ function QuoteDetail({quote:q, session, onBack}) {
   </div>;
 }
 
-function Quotes({session}) {
+function Quotes({session, onDetailChange=()=>{}}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -694,6 +693,7 @@ function Quotes({session}) {
   const [datePeriod,setDatePeriod]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{ onDetailChange(!!selected); },[selected]);
   if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -762,17 +762,8 @@ function BillDetail({bill:b, session, onBack}) {
   ].filter(f=>f.value);
 
   return <div>
-    <div style={{padding:'16px 16px 8px'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
-        <ChevronLeft size={18}/> Retour
-      </button>
-    </div>
-    <div style={{padding:'0 16px 16px'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:4}}>
-        <h1 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0,flex:1}}>{b.title||b.event||'Facture'}</h1>
-        {b.status&&<Badge label={b.status} color={statusColor}/>}
-      </div>
-      {b.nb&&<div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{b.nb}</div>}
+    <BackHeader title={b.title||b.event||'Facture'} subtitle={b.nb} onBack={onBack} badge={b.status?<Badge label={b.status} color={statusColor}/>:null}/>
+    <div style={{padding:'16px 16px 0'}}>
       <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
         {[
           {label:'HT', value:money(b.total_ht), accent:T.ink},
@@ -829,7 +820,7 @@ function BillDetail({bill:b, session, onBack}) {
   </div>;
 }
 
-function Bills({session}) {
+function Bills({session, onDetailChange=()=>{}}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -838,6 +829,7 @@ function Bills({session}) {
   const [datePeriod,setDatePeriod]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{ onDetailChange(!!selected); },[selected]);
   if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -1015,21 +1007,8 @@ function CompanyDetail({company, allCustomers, onBack}) {
   );
 
   return <div>
-    <div style={{padding:'16px 16px 8px'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:500}}>
-        <ChevronLeft size={18}/> Retour
-      </button>
-    </div>
-    <div style={{padding:'0 16px 16px'}}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-        <div style={{width:48,height:48,borderRadius:12,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-          <Building2 size={22} color={T.brand}/>
-        </div>
-        <div>
-          <h1 style={{fontSize:17,fontWeight:700,color:T.ink,margin:0}}>{company.name||'Société'}</h1>
-          {company.city&&<div style={{fontSize:13,color:T.textMuted}}>{company.city}{company.country?`, ${company.country}`:''}</div>}
-        </div>
-      </div>
+    <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+company.country:''}`} onBack={onBack}/>
+    <div style={{padding:'16px 16px 0'}}>
 
       <Card style={{marginBottom:16}}>
         {[
