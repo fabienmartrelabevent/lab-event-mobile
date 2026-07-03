@@ -406,6 +406,7 @@ function Events({session}) {
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
   const [search,setSearch]=useState('');
+  const [pipeline,setPipeline]=useState(''); // ← doit être avant tout return conditionnel
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -418,10 +419,9 @@ function Events({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const [pipeline,setPipeline]=useState('');
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
-  const pipelines=[...new Set(sorted.map(e=>e.win_lost||'Non défini').filter(Boolean))];
+  const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
   const filtered=sorted.filter(e=>{
     const mQ=!q||(e.event_name||'').toLowerCase().includes(q)||(e.customer||'').toLowerCase().includes(q)||(e.company_name||'').toLowerCase().includes(q)||(e.contact_name||'').toLowerCase().includes(q)||(e.status_name||'').toLowerCase().includes(q)||(e.place||'').toLowerCase().includes(q);
     const mP=!pipeline||e.win_lost===pipeline;
@@ -498,6 +498,28 @@ function Planning({session}) {
         })}
       </div>}
   </div>;
+}
+
+// ─── Date Filter ─────────────────────────────────────────────────
+function DateFilter({value, onChange}) {
+  const opts=[
+    {k:'', label:'2 ans'},
+    {k:'year', label:'Cette année'},
+    {k:'month', label:'Ce mois'},
+    {k:'quarter', label:'Ce trimestre'},
+  ];
+  return <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+    {opts.map(o=><button key={o.k} onClick={()=>onChange(o.k)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${value===o.k?T.brand:T.border}`,background:value===o.k?T.brandTint:'none',color:value===o.k?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:value===o.k?600:400}}>{o.label}</button>)}
+  </div>;
+}
+function applyDateFilter(items, dateField, period) {
+  if (!period) return items;
+  const now = new Date();
+  let from;
+  if (period==='month') from=new Date(now.getFullYear(),now.getMonth(),1);
+  else if (period==='quarter') from=new Date(now.getFullYear(),Math.floor(now.getMonth()/3)*3,1);
+  else if (period==='year') from=new Date(now.getFullYear(),0,1);
+  return items.filter(i=>i[dateField]&&new Date(i[dateField])>=from);
 }
 
 // ─── Finances ────────────────────────────────────────────────────
@@ -669,6 +691,7 @@ function Quotes({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [selected,setSelected]=useState(null);
+  const [datePeriod,setDatePeriod]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)}/>;
@@ -676,16 +699,18 @@ function Quotes({session}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0));
-  const filtered=q?sorted.filter(d=>
+  const byDate=applyDateFilter(sorted,'date_of_quote',datePeriod);
+  const filtered=q?byDate.filter(d=>
     (d.title||'').toLowerCase().includes(q)||
     (d.event||'').toLowerCase().includes(q)||
     (d.nb||'').toLowerCase().includes(q)||
     (d.customer||'').toLowerCase().includes(q)||
     (d.status||'').toLowerCase().includes(q)
-  ):sorted;
+  ):byDate;
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{q?` sur ${sorted.length}`:''}</div>
+    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={FileText} msg={q?"Aucun résultat.":"Aucun devis."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((item,i)=><Card key={item.quote_id||i} onClick={()=>setSelected(item)} style={{padding:14}}>
@@ -810,6 +835,7 @@ function Bills({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [selected,setSelected]=useState(null);
+  const [datePeriod,setDatePeriod]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)}/>;
@@ -817,16 +843,18 @@ function Bills({session}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-  const filtered=q?sorted.filter(b=>
+  const byDate=applyDateFilter(sorted,'date',datePeriod);
+  const filtered=q?byDate.filter(b=>
     (b.event||'').toLowerCase().includes(q)||
     (b.customer||'').toLowerCase().includes(q)||
     (b.nb||'').toLowerCase().includes(q)||
     (b.contact_name||'').toLowerCase().includes(q)||
     (b.status||'').toLowerCase().includes(q)
-  ):sorted;
+  ):byDate;
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Événement, client, numéro…"/>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Receipt} msg={q?"Aucun résultat.":"Aucune facture."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((b,i)=><Card key={b.bill_id||i} onClick={()=>setSelected(b)} style={{padding:14}}>
@@ -851,20 +879,23 @@ function Payments({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [datePeriod,setDatePeriod]=useState('');
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.prepayment_date||0)-new Date(a.prepayment_date||0));
-  const filtered=q?sorted.filter(p=>
+  const byDate=applyDateFilter(sorted,'prepayment_date',datePeriod);
+  const filtered=q?byDate.filter(p=>
     (p.bill_number||'').toLowerCase().includes(q)||
     (p.payment_type||'').toLowerCase().includes(q)||
     (p.prepayment_info||'').toLowerCase().includes(q)
-  ):sorted;
+  ):byDate;
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="N° facture, mode de paiement…"/>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} paiement{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
+    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} paiement{filtered.length>1?'s':''}{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={CreditCard} msg={q?"Aucun résultat.":"Aucun paiement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((p,i)=><Card key={p.id||i} style={{padding:14}}>
@@ -1253,7 +1284,7 @@ function CreateContactForm({session,companies,onDone}) {
         <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Civilité</label>
         <select value={civility} onChange={e=>setCivility(e.target.value)} style={{...inp,marginBottom:14}}>
           <option value="">—</option>
-          <option value="M.">M.</option>
+          <option value="M">M.</option>
           <option value="Mme">Mme</option>
           <option value="Dr">Dr</option>
         </select>
@@ -1333,8 +1364,8 @@ function QuickCreateModal({session,companies,onClose,onSuccess}) {
 
   const handleDone=(msg)=>{setDone(true);setDoneMsg(msg);};
 
-  return <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
-    <div style={{background:T.surface,borderRadius:'20px 20px 0 0',width:'100%',maxWidth:500,maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 32px rgba(0,0,0,0.15)'}}>
+  return <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}}>
+    <div style={{background:T.surface,borderRadius:20,width:'100%',maxWidth:480,maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'20px 24px 16px',borderBottom:type?`1px solid ${T.border}`:'none',flexShrink:0}}>
         <h2 style={{fontSize:16,fontWeight:700,color:T.ink,margin:0}}>
           {!type?'Créer…':type==='event'?'Nouvel événement':'Nouveau client'}
