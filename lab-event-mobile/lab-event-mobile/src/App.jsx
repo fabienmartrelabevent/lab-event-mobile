@@ -746,6 +746,12 @@ function Finances({session}) {
   </div>;
 }
 
+
+function dateAroundEvent(d, daysBefore=30) {
+  const dt = new Date(d || new Date());
+  dt.setDate(dt.getDate() - daysBefore);
+  return dt.toISOString().split('T')[0];
+}
 // ─── Quote Detail ─────────────────────────────────────────────────
 function safeStr(v) {
   if (v == null) return '';
@@ -764,15 +770,15 @@ function QuoteDetail({quote:q, session, onBack}) {
 
   useEffect(()=>{
     // Load lines from vue-analytics-light filtered by document_id
-    // Try BOTH id and quote_id since the API uses different IDs internally
+    // Use narrow date range around the event date to get the right document
+    const qDateFrom = dateAroundEvent(q.date_of_event||q.date_of_quote||q.date, 60);
+    const docIds=new Set([String(q.id),String(q.quote_id)].filter(Boolean));
     Promise.all([
-      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
-      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+      api(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:qDateFrom,per_page:9999}}).catch(()=>null),
+      api(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:qDateFrom}}).catch(()=>null),
     ]).then(([analytics,rentability])=>{
-      const docIds=new Set([String(q.id),String(q.quote_id)].filter(Boolean));
       if(Array.isArray(analytics)) setLines(analytics.filter(l=>docIds.has(String(l.document_id))));
-      const rentaIds=new Set([String(q.id),String(q.quote_id)].filter(Boolean));
-      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>rentaIds.has(String(r.document_id))));
+      if(Array.isArray(rentability)) setRenta(rentability.filter(r=>docIds.has(String(r.document_id))));
       setLoadingLines(false);
     });
   },[q,session]);
@@ -941,9 +947,10 @@ function BillDetail({bill:b, session, onBack}) {
 
   useEffect(()=>{
     const billDocIds=new Set([String(b.id),String(b.bill_id)].filter(Boolean));
+    const bDateFrom = dateAroundEvent(b.date_of_event||b.date_of_bill||b.date, 60);
     Promise.all([
-      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
-      apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}}).catch(()=>null),
+      api(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:bDateFrom,per_page:9999}}).catch(()=>null),
+      api(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:bDateFrom}}).catch(()=>null),
     ]).then(([analytics,rentability])=>{
       if(Array.isArray(analytics)) setLines(analytics.filter(l=>billDocIds.has(String(l.document_id))));
       if(Array.isArray(rentability)) setRenta(rentability.filter(r=>billDocIds.has(String(r.document_id))));
