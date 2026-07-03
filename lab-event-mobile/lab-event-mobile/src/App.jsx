@@ -343,13 +343,14 @@ function EventRow({event,onClick}) {
 
 // ─── Sticky back header ──────────────────────────────────────────
 function BackHeader({title, subtitle, onBack, badge}) {
-  return <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'0 16px',position:'sticky',top:60,zIndex:8,display:'flex',alignItems:'center',gap:10,minHeight:48}}>
-    <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:600,flexShrink:0,padding:'10px 0'}}>
+  return <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'0 16px',position:'sticky',top:60,zIndex:8,display:'flex',alignItems:'center',gap:10,minHeight:52,boxShadow:'0 2px 8px rgba(16,24,40,0.04)'}}>
+    <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:600,flexShrink:0,padding:'12px 0'}}>
       <ChevronLeft size={18}/> Retour
     </button>
+    <div style={{width:1,height:20,background:T.border,flexShrink:0}}/>
     {title&&<div style={{flex:1,minWidth:0,overflow:'hidden'}}>
       <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{title}</div>
-      {subtitle&&<div style={{fontSize:11,color:T.textMuted}}>{subtitle}</div>}
+      {subtitle&&<div style={{fontSize:11,color:T.textMuted,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{subtitle}</div>}
     </div>}
     {badge&&<div style={{flexShrink:0}}>{badge}</div>}
   </div>;
@@ -376,16 +377,16 @@ function EventDetail({event,onBack}) {
     {label:'Catégorie',value:event.event_category},
     {label:'Code',value:event.incremental_code},
     {label:'Prestation',value:event.main_product},
-  ].filter(f=>f.value);
+  ].filter(f=>f.value&&f.value!=='null'&&f.value!=='undefined'&&safeStr(f.value));
 
   return <div>
     <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
-    <div style={{padding:'16px 16px 0'}}>
-      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
-        {event.status_name&&<Badge label={event.status_name} color={T.brand}/>}
-      </div>
+    <div style={{padding:'20px 16px 24px'}}>
+      {event.status_name&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+        <Badge label={event.status_name} color={T.brand}/>
+      </div>}
       {/* CA Cards */}
-      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      {[money(event.quotes_sell_price_sign),money(event.quotes_sell_price),money(event.total_marge)].some(v=>v!=='—')&&<div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
         {[
           {label:'CA signé TTC',value:money(event.quotes_sell_price_sign),accent:T.success},
           {label:'CA total TTC',value:money(event.quotes_sell_price),accent:T.brand},
@@ -394,12 +395,12 @@ function EventDetail({event,onBack}) {
           <div style={{fontSize:10.5,color:T.textMuted,marginBottom:2}}>{f.label}</div>
           <div style={{fontSize:13.5,fontWeight:700,color:f.accent}}>{f.value}</div>
         </div>)}
-      </div>
+      </div>}
       <Card>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
-          {(f.label==='Email'&&f.value)?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
-          :(f.label==='Téléphone'&&f.value)?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+          {(f.label==='Email'&&f.value&&f.value!=='null')?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
+          :(f.label==='Téléphone'&&f.value&&f.value!=='null')?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
@@ -547,7 +548,8 @@ function Finances({session}) {
 // ─── Quote Detail ─────────────────────────────────────────────────
 function safeStr(v) {
   if (v == null) return '';
-  if (typeof v === 'string') return v;
+  if (v === 'null' || v === 'undefined') return ''; // API sometimes returns string "null"
+  if (typeof v === 'string') return v.trim();
   if (typeof v === 'number') return String(v);
   if (Array.isArray(v)) return v.join(', ');
   if (typeof v === 'object') return JSON.stringify(v);
@@ -588,11 +590,11 @@ function QuoteDetail({quote:q, session, onBack}) {
     {label:'Chef de projet', value:safeStr(q.pm)},
     {label:'Prestation principale', value:safeStr(q.main_product)},
     {label:'TVA', value:formatVAT(q.vat_rates)},
-  ].filter(f=>f.value);
+  ].filter(f=>f.value&&f.value!=='null'&&f.value!=='undefined'&&safeStr(f.value));
 
   return <div>
     <BackHeader title={q.title||q.event||'Devis'} subtitle={q.nb} onBack={onBack} badge={q.status?<Badge label={q.status} color={statusColor}/>:null}/>
-    <div style={{padding:'16px 16px 0'}}>
+    <div style={{padding:'20px 16px 24px'}}>
 
       {/* Montants */}
       <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
@@ -759,11 +761,11 @@ function BillDetail({bill:b, session, onBack}) {
     {label:'Événement', value:safeStr(b.event)},
     {label:'Commercial', value:safeStr(b.owner)},
     {label:'Chef de projet', value:safeStr(b.pm)},
-  ].filter(f=>f.value);
+  ].filter(f=>f.value&&f.value!=='null'&&f.value!=='undefined'&&safeStr(f.value));
 
   return <div>
     <BackHeader title={b.title||b.event||'Facture'} subtitle={b.nb} onBack={onBack} badge={b.status?<Badge label={b.status} color={statusColor}/>:null}/>
-    <div style={{padding:'16px 16px 0'}}>
+    <div style={{padding:'20px 16px 24px'}}>
       <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
         {[
           {label:'HT', value:money(b.total_ht), accent:T.ink},
@@ -1008,7 +1010,7 @@ function CompanyDetail({company, allCustomers, onBack}) {
 
   return <div>
     <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+company.country:''}`} onBack={onBack}/>
-    <div style={{padding:'16px 16px 0'}}>
+    <div style={{padding:'20px 16px 24px'}}>
 
       <Card style={{marginBottom:16}}>
         {[
