@@ -1731,6 +1731,7 @@ function Rentabilite({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+  const [signedOnly,setSignedOnly]=useState(true); // filtre signé par défaut
   const [search,setSearch]=useState('');
 
   const load=useCallback(async()=>{
@@ -1743,67 +1744,92 @@ function Rentabilite({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const q=search.toLowerCase();
-  const sorted=[...(items||[])].sort((a,b)=>new Date(b.event_date||0)-new Date(a.event_date||0));
-  const filtered=q?sorted.filter(r=>
-    (r.member||'').toLowerCase().includes(q)||
-    (r.goods_section||'').toLowerCase().includes(q)||
-    (r.status||'').toLowerCase().includes(q)||
-    (r.document_type||'').toLowerCase().includes(q)
-  ):sorted;
+  // Filtre signé
+  const base=(items||[]).filter(r=>signedOnly?r.signed:true);
 
-  // Totaux
-  const totalPrice=filtered.reduce((s,r)=>s+(Number(r.sell_price)||0),0);
-  const totalMargin=filtered.reduce((s,r)=>s+(Number(r.margin)||0),0);
-  const marginPct=totalPrice>0?((totalMargin/totalPrice)*100).toFixed(1):0;
+  // Agréger par goods_section
+  const bySection={};
+  base.forEach(r=>{
+    const sec=r.goods_section||'Autres';
+    if(!bySection[sec]) bySection[sec]={section:sec,ca:0,margin:0,commission:0,count:0};
+    bySection[sec].ca+=Number(r.sell_price)||0;
+    bySection[sec].margin+=Number(r.margin)||0;
+    bySection[sec].commission+=Number(r.commission)||0;
+    bySection[sec].count++;
+  });
+
+  const q=search.toLowerCase();
+  const sections=Object.values(bySection)
+    .filter(s=>!q||(s.section||'').toLowerCase().includes(q))
+    .sort((a,b)=>b.ca-a.ca);
+
+  const totalCA=sections.reduce((s,r)=>s+r.ca,0);
+  const totalMargin=sections.reduce((s,r)=>s+r.margin,0);
+  const totalComm=sections.reduce((s,r)=>s+r.commission,0);
+  const totalRate=totalCA>0?((totalMargin/totalCA)*100).toFixed(1):0;
 
   return <div style={{padding:16}}>
-    <SearchBar value={search} onChange={setSearch} placeholder="Section, commercial, statut…"/>
-    <div style={{display:'flex',gap:8,marginBottom:12}}>
-      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
-        <div style={{fontSize:11,color:T.textMuted}}>CA vendu</div>
-        <div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(totalPrice)}</div>
-      </div>
-      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
-        <div style={{fontSize:11,color:T.textMuted}}>Marge</div>
-        <div style={{fontSize:14,fontWeight:700,color:T.success}}>{money(totalMargin)}</div>
-      </div>
-      <div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
-        <div style={{fontSize:11,color:T.textMuted}}>Taux</div>
-        <div style={{fontSize:14,fontWeight:700,color:T.info}}>{marginPct}%</div>
-      </div>
+    {/* Filtre signé */}
+    <div style={{display:'flex',gap:6,marginBottom:12}}>
+      {[{k:true,label:'Signés uniquement'},{k:false,label:'Tous les documents'}].map(o=><button key={String(o.k)} onClick={()=>setSignedOnly(o.k)} style={{flex:1,padding:'7px 8px',borderRadius:8,border:`1.5px solid ${signedOnly===o.k?T.brand:T.border}`,background:signedOnly===o.k?T.brandTint:'none',color:signedOnly===o.k?T.brand:T.textMuted,fontSize:12,fontWeight:signedOnly===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
     </div>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} ligne{filtered.length>1?'s':''}</div>
-    {filtered.length===0?<Empty icon={TrendingUp} msg="Aucune donnée de rentabilité."/>:
+
+    {/* KPIs globaux */}
+    <div style={{display:'flex',gap:8,marginBottom:16}}>
+      {[
+        {label:'CA vendu',value:money(totalCA),accent:T.brand},
+        {label:'Marge',value:money(totalMargin),accent:T.success},
+        {label:'Commission',value:money(totalComm),accent:T.info},
+        {label:'Taux marge',value:`${totalRate}%`,accent:totalRate>=30?T.success:totalRate>=15?T.warning:T.danger},
+      ].map((k,i)=><div key={i} style={{flex:1,minWidth:0,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'8px 6px',textAlign:'center'}}>
+        <div style={{fontSize:10,color:T.textMuted,marginBottom:2}}>{k.label}</div>
+        <div style={{fontSize:12,fontWeight:700,color:k.accent}}>{k.value}</div>
+      </div>)}
+    </div>
+
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom de section…"/>
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{sections.length} section{sections.length>1?'s':''} · {base.length} ligne{base.length>1?'s':''}</div>
+
+    {sections.length===0?<Empty icon={TrendingUp} msg="Aucune donnée."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((r,i)=><Card key={i} style={{padding:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{r.goods_section||r.document_type||'—'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap'}}>
-                {r.member&&<span>{r.member}</span>}
-                {r.event_date&&<span>{date(r.event_date)}</span>}
+        {sections.map((s,i)=>{
+          const rate=s.ca>0?((s.margin/s.ca)*100).toFixed(0):0;
+          const rateColor=rate>=30?T.success:rate>=15?T.warning:T.danger;
+          return <Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.section}</div>
+                <div style={{fontSize:11.5,color:T.textMuted,marginTop:2}}>{s.count} ligne{s.count>1?'s':''}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(s.ca)}</div>
+                <div style={{fontSize:12,color:T.success}}>{money(s.margin)}</div>
               </div>
             </div>
-            <div style={{textAlign:'right',flexShrink:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(r.sell_price)}</div>
-              <div style={{fontSize:11.5,color:Number(r.margin)>0?T.success:T.danger}}>
-                {money(r.margin)} {r.sell_price&&Number(r.sell_price)>0?`(${((Number(r.margin)/Number(r.sell_price))*100).toFixed(0)}%)`:''}
+            {/* Barre de taux */}
+            <div style={{marginTop:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                <span style={{fontSize:11,color:T.textMuted}}>Taux de marge</span>
+                <span style={{fontSize:11,fontWeight:700,color:rateColor}}>{rate}%</span>
+              </div>
+              <div style={{height:4,background:T.border,borderRadius:4,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${Math.min(Number(rate),100)}%`,background:rateColor,borderRadius:4,transition:'width 0.3s'}}/>
               </div>
             </div>
-          </div>
-          {r.status&&<div style={{marginTop:6}}><Badge label={r.status} color={r.signed?T.success:T.warning}/></div>}
-        </Card>)}
+          </Card>;
+        })}
       </div>}
   </div>;
 }
 
-// ─── Analytics light ──────────────────────────────────────────────
+// ─── Analytics produits ───────────────────────────────────────────
 function AnalyticsLight({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [filterSection,setFilterSection]=useState('');
+  const [sortBy,setSortBy]=useState('ca'); // 'ca' | 'count'
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -1815,39 +1841,76 @@ function AnalyticsLight({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  const q=search.toLowerCase();
-  const sorted=[...(items||[])].sort((a,b)=>new Date(b.date_from||0)-new Date(a.date_from||0));
-  const filtered=q?sorted.filter(a=>
-    (a.product_name||'').toLowerCase().includes(q)||
-    (a.good_name||'').toLowerCase().includes(q)||
-    (a.document_type||'').toLowerCase().includes(q)
-  ):sorted;
+  const all=items||[];
 
-  const totalSell=filtered.reduce((s,a)=>s+(Number(a.sell_price)||0),0);
+  // Agréger par good_name
+  const byArticle={};
+  all.forEach(a=>{
+    const name=a.good_name||a.product_name||'—';
+    const section=a.product_name||'—';
+    if(!byArticle[name]) byArticle[name]={name,section,ca:0,count:0,puTotal:0,puCount:0};
+    byArticle[name].ca+=Number(a.sell_price)||0;
+    byArticle[name].count++;
+    if(Number(a.price)>0){byArticle[name].puTotal+=Number(a.price);byArticle[name].puCount++;}
+  });
+
+  // Sections uniques pour le filtre
+  const sections=[...new Set(all.map(a=>a.product_name).filter(Boolean))].sort();
+
+  const q=search.toLowerCase();
+  const articles=Object.values(byArticle)
+    .filter(a=>{
+      const mQ=!q||a.name.toLowerCase().includes(q)||a.section.toLowerCase().includes(q);
+      const mS=!filterSection||a.section===filterSection;
+      return mQ&&mS;
+    })
+    .sort((a,b)=>sortBy==='ca'?b.ca-a.ca:b.count-a.count);
+
+  const totalCA=articles.reduce((s,a)=>s+a.ca,0);
+  const maxCA=articles[0]?.ca||1;
 
   return <div style={{padding:16}}>
-    <SearchBar value={search} onChange={setSearch} placeholder="Produit, type de document…"/>
-    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-      <span style={{fontSize:12,color:T.textMuted}}>{filtered.length} ligne{filtered.length>1?'s':''}</span>
-      <span style={{fontSize:14,fontWeight:700,color:T.brand}}>Total : {money(totalSell)}</span>
+    {/* Filtre section */}
+    {sections.length>0&&<div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
+      <button onClick={()=>setFilterSection('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!filterSection?T.brand:T.border}`,background:!filterSection?T.brandTint:'none',color:!filterSection?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!filterSection?600:400}}>Tout</button>
+      {sections.map(s=><button key={s} onClick={()=>setFilterSection(s===filterSection?'':s)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${filterSection===s?T.brand:T.border}`,background:filterSection===s?T.brandTint:'none',color:filterSection===s?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:filterSection===s?600:400}}>{s}</button>)}
+    </div>}
+
+    <SearchBar value={search} onChange={setSearch} placeholder="Nom d'article ou section…"/>
+
+    {/* Tri + total */}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+      <span style={{fontSize:12,color:T.textMuted}}>{articles.length} article{articles.length>1?'s':''} · Total {money(totalCA)}</span>
+      <div style={{display:'flex',gap:4}}>
+        {[{k:'ca',label:'CA ↓'},{k:'count',label:'Volume ↓'}].map(o=><button key={o.k} onClick={()=>setSortBy(o.k)} style={{padding:'3px 8px',borderRadius:6,border:`1px solid ${sortBy===o.k?T.brand:T.border}`,background:sortBy===o.k?T.brandTint:'none',color:sortBy===o.k?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:sortBy===o.k?600:400}}>{o.label}</button>)}
+      </div>
     </div>
-    {filtered.length===0?<Empty icon={TrendingUp} msg="Aucune donnée analytics."/>:
+
+    {articles.length===0?<Empty icon={TrendingUp} msg="Aucun article."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((a,i)=><Card key={i} style={{padding:14}}>
-          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.product_name||a.good_name||'Produit'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap'}}>
-                {a.document_type&&<Badge label={a.document_type} color={T.info}/>}
-                {a.date_from&&<span>{date(a.date_from)}</span>}
+        {articles.map((a,i)=>{
+          const pct=(a.ca/maxCA)*100;
+          const puMoy=a.puCount>0?a.puTotal/a.puCount:0;
+          return <Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.name}</div>
+                <div style={{fontSize:11.5,color:T.textMuted,marginTop:2,display:'flex',gap:8,alignItems:'center'}}>
+                  {a.section&&a.section!==a.name&&<span>{a.section}</span>}
+                  <span style={{color:T.brand}}>{a.count}×</span>
+                  {puMoy>0&&<span>PU moy : {money(puMoy)}</span>}
+                </div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:14,fontWeight:700,color:T.ink}}>{money(a.ca)}</div>
               </div>
             </div>
-            <div style={{textAlign:'right',flexShrink:0}}>
-              {a.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(a.sell_price)}</div>}
-              {a.price&&a.sell_price!==a.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(a.price)}</div>}
+            {/* Barre proportionnelle au CA */}
+            <div style={{height:3,background:T.border,borderRadius:4,overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${pct}%`,background:T.brand,borderRadius:4}}/>
             </div>
-          </div>
-        </Card>)}
+          </Card>;
+        })}
       </div>}
   </div>;
 }
