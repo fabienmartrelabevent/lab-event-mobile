@@ -439,16 +439,21 @@ function EventDetail({event, onBack, session}) {
     // Pass event_id in both formats - API accepts either UUID or numeric id
     if(event.event_id) { body.event_id=String(event.event_id); body.eventId=String(event.event_id); }
     api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body}).then(d=>{
-      // Flatten response (can be array or object with nested arrays)
+      // Response structure: {rows: [...]} or [{...}] or {data: {room: [...]}}
       let flat=[];
       if(Array.isArray(d)) flat=d;
-      else if(d?.data) flat=Array.isArray(d.data)?d.data:Object.values(d.data).flat();
-      else if(typeof d==='object') flat=Object.values(d).flat().filter(x=>x&&typeof x==='object');
-      // Client-side filter by event_name as fallback (case-insensitive)
+      else if(Array.isArray(d?.rows)) flat=d.rows;
+      else if(d?.data&&Array.isArray(d.data)) flat=d.data;
+      else if(d?.data&&typeof d.data==='object') flat=Object.values(d.data).flat();
+      else if(typeof d==='object'&&d!==null) {
+        // Try all values to find arrays of objects
+        const vals=Object.values(d).filter(v=>Array.isArray(v));
+        if(vals.length>0) flat=vals.flat();
+      }
+      // Client-side filter by event_name as fallback
       if(flat.length>0&&event.event_name){
         const evName=(event.event_name||'').toLowerCase().trim();
         const byEvent=flat.filter(r=>(r.event_name||'').toLowerCase().trim()===evName);
-        // Use filtered results only if we got matches; otherwise show all in date range
         flat=byEvent.length>0?byEvent:flat;
       }
       setSchedulerData(flat);
@@ -574,15 +579,11 @@ function EventDetail({event, onBack, session}) {
         :schedulerErr?<ErrBanner msg={schedulerErr}/>
         :(!schedulerData||schedulerData.length===0)?<Empty icon={Calendar} msg="Aucune réservation de salle trouvée pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {/* DEBUG - affiche les champs du 1er item */}
-          <Card style={{padding:12,background:`${T.warning}11`,border:`1px solid ${T.warning}44`}}>
-            <div style={{fontSize:10.5,color:T.textMuted,marginBottom:4,fontWeight:600}}>DEBUG — Champs disponibles :</div>
-            <div style={{fontSize:10,color:T.ink,fontFamily:'monospace',wordBreak:'break-all'}}>{JSON.stringify(schedulerData[0],null,1).substring(0,400)}</div>
-          </Card>
           {schedulerData.map((r,i)=>{
-            const room=r.product_real_name||r.room_name||r.room||r.name||r.title||'—';
-            const start=r.start_at?r.start_at.substring(0,16).replace('T',' '):'—';
-            const end=r.end_at?r.end_at.substring(0,16).replace('T',' '):'';
+            const room=r.product_real_name||r.room_name||r.room||r.name||r.title||r.product||'—';
+            const start=r.start_at?r.start_at.substring(0,16).replace('T',' '):(r.startDate||r.start||'—');
+            const end=r.end_at?r.end_at.substring(0,16).replace('T',' '):(r.endDate||r.end||'');
+            const evName=r.event_name||r.eventName||r.name||'';
             return <Card key={i} style={{padding:14}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
@@ -591,11 +592,14 @@ function EventDetail({event, onBack, session}) {
                     <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{start}</span>
                     {end&&end!==start&&<span>→ {end}</span>}
                   </div>
-                  {(r.customer_name||r.company_name)&&<div style={{fontSize:12,color:T.brand,marginTop:2}}>{r.customer_name||r.company_name}</div>}
+                  {evName&&evName!==room&&<div style={{fontSize:12,color:T.brand,marginTop:2}}>{evName}</div>}
+                  {(r.customer_name||r.company_name)&&<div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{r.customer_name||r.company_name}</div>}
                 </div>
-                {(r.status_name||r.status)&&<Badge label={r.status_name||r.status} color={r.status_color||T.brand}/>}
+                <div style={{display:'flex',flexDirection:'column',gap:4,alignItems:'flex-end',flexShrink:0}}>
+                  {(r.status_name||r.status)&&<Badge label={r.status_name||r.status} color={r.status_color||T.brand}/>}
+                  {r.total_goods!=null&&r.total_goods>0&&<div style={{fontSize:10.5,color:T.textMuted}}>{r.total_goods} prestation{r.total_goods>1?'s':''}</div>}
+                </div>
               </div>
-              {r.total_goods!=null&&r.total_goods>0&&<div style={{fontSize:11.5,color:T.textMuted,marginTop:6}}>{r.total_goods} prestation{r.total_goods>1?'s':''}</div>}
             </Card>;
           })}
         </div>
