@@ -613,36 +613,35 @@ function QuoteDetail({quote:q, session, onBack}) {
       <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>
         Lignes {loadingLines&&<Loader2 size={12} color={T.textMuted} style={{animation:'spin 1s linear infinite',verticalAlign:'middle'}}/>}
       </h2>
-      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
-        {lines.map((l,i)=>{
-          const rLine=renta?.find(r=>r.goods_section===l.good_name||r.goods_section===l.product_name);
-          return <Card key={i} style={{padding:12}}>
-            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{l.product_name||l.good_name||'—'}</div>
-                {l.document_type&&<Badge label={l.document_type} color={T.info}/>}
+      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:0,marginBottom:16}}>
+        {Object.entries(lines.reduce((acc,l)=>{
+          const section=l.product_name||'Articles';
+          if(!acc[section]) acc[section]=[];
+          acc[section].push(l);
+          return acc;
+        },{})).map(([section,items])=><div key={section} style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:'0.5px',padding:'4px 0 6px'}}>{section}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:5}}>
+            {items.map((l,i)=><Card key={i} style={{padding:'10px 14px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+                <div style={{fontSize:13,fontWeight:500,color:T.ink,flex:1}}>{l.good_name||l.product_name||'—'}</div>
+                {Number(l.sell_price)>0&&<div style={{fontSize:13,fontWeight:700,color:T.brand,flexShrink:0}}>{money(l.sell_price)}</div>}
               </div>
-              <div style={{textAlign:'right',flexShrink:0}}>
-                {l.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(l.sell_price)}</div>}
-                {l.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(l.price)}</div>}
-                {rLine?.margin&&<div style={{fontSize:11.5,color:T.success}}>Marge : {money(rLine.margin)}</div>}
-              </div>
-            </div>
-          </Card>;
-        })}
+            </Card>)}
+          </div>
+        </div>)}
       </div>}
 
       {/* Sections brutes si pas de lignes analytics */}
-      {!loadingLines&&(!lines||lines.length===0)&&sections.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
-        {sections.filter(s=>s.sellPrice||s.price).map((s,i)=><Card key={i} style={{padding:12}}>
-          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-            <div style={{fontSize:13,fontWeight:600,color:T.ink}}>
-              {safeStr(s.name||s.title||s.goods_section||s.col_1||`Section ${i+1}`)}
-              {s.col_2&&s.col_2!==s.col_1&&<span style={{fontSize:11.5,color:T.textMuted,fontWeight:400,marginLeft:6}}>{safeStr(s.col_2)}</span>}
+      {!loadingLines&&(!lines||lines.length===0)&&sections.length>0&&<div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:16}}>
+        {sections.filter(s=>Number(s.sellPrice)>0||Number(s.price)>0).map((s,i)=><Card key={i} style={{padding:'10px 14px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+            <div style={{fontSize:13,fontWeight:500,color:T.ink}}>
+              Ligne {i+1}
+              {(s.col_1||s.col_2)&&<span style={{fontSize:11,color:T.textSubtle,marginLeft:6}}>{safeStr(s.col_1)} {safeStr(s.col_2)}</span>}
             </div>
             <div style={{textAlign:'right',flexShrink:0}}>
-              {s.sellPrice&&<div style={{fontSize:13.5,fontWeight:700,color:T.brand}}>{money(s.sellPrice)}</div>}
-              {s.price&&Number(s.price)!==Number(s.sellPrice)&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(s.price)}</div>}
+              {Number(s.sellPrice)>0&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(s.sellPrice)}</div>}
             </div>
           </div>
         </Card>)}
@@ -781,19 +780,23 @@ function BillDetail({bill:b, session, onBack}) {
       <h2 style={{fontSize:13,fontWeight:700,color:T.ink,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'0.4px'}}>
         Lignes {loadingLines&&<Loader2 size={12} color={T.textMuted} style={{animation:'spin 1s linear infinite',verticalAlign:'middle'}}/>}
       </h2>
-      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16}}>
-        {lines.map((l,i)=><Card key={i} style={{padding:12}}>
-          <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{l.product_name||l.good_name||'—'}</div>
-              {l.document_type&&<Badge label={l.document_type} color={T.info}/>}
-            </div>
-            <div style={{textAlign:'right',flexShrink:0}}>
-              {l.sell_price&&<div style={{fontSize:13,fontWeight:700,color:T.brand}}>{money(l.sell_price)}</div>}
-              {l.price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU : {money(l.price)}</div>}
-            </div>
+      {!loadingLines&&lines&&lines.length>0&&<div style={{display:'flex',flexDirection:'column',gap:0,marginBottom:16}}>
+        {Object.entries(lines.reduce((acc,l)=>{
+          const section=l.product_name||'Articles';
+          if(!acc[section]) acc[section]=[];
+          acc[section].push(l);
+          return acc;
+        },{})).map(([section,items])=><div key={section} style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:'0.5px',padding:'4px 0 6px'}}>{section}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:5}}>
+            {items.map((l,i)=><Card key={i} style={{padding:'10px 14px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center'}}>
+                <div style={{fontSize:13,fontWeight:500,color:T.ink,flex:1}}>{l.good_name||l.product_name||'—'}</div>
+                {Number(l.sell_price)>0&&<div style={{fontSize:13,fontWeight:700,color:T.brand,flexShrink:0}}>{money(l.sell_price)}</div>}
+              </div>
+            </Card>)}
           </div>
-        </Card>)}
+        </div>)}
       </div>}
       {!loadingLines&&(!lines||lines.length===0)&&<div style={{fontSize:12.5,color:T.textMuted,marginBottom:16}}>Aucune ligne disponible.</div>}
       {/* Rentabilité */}
