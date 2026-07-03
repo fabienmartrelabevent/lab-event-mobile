@@ -357,7 +357,8 @@ function BackHeader({title, subtitle, onBack, badge}) {
 }
 
 // ─── Event Detail ────────────────────────────────────────────────
-function EventDetail({event,onBack}) {
+function EventDetail({event, onBack}) {
+  const [docTab, setDocTab] = useState('devis');
   const wl=event.win_lost;
   const wlColor=wl==='Gagné'?T.success:wl==='Perdu'?T.danger:T.warning;
   const fields=[
@@ -379,9 +380,39 @@ function EventDetail({event,onBack}) {
     {label:'Prestation',value:event.main_product},
   ].filter(f=>f.value&&f.value!=='null'&&f.value!=='undefined'&&safeStr(f.value));
 
+  // Load related docs from cache using incremental_code as link
+  const code = String(event.incremental_code||'');
+  const relatedQuotes = (() => {
+    try {
+      const k = Object.keys(localStorage).find(k => k.includes('quotes'));
+      return k ? JSON.parse(localStorage.getItem(k)).data.filter(q => String(q.incremental_code)===code) : [];
+    } catch { return []; }
+  })().sort((a,b) => new Date(b.date_of_quote||0) - new Date(a.date_of_quote||0));
+
+  const relatedBills = (() => {
+    try {
+      const k = Object.keys(localStorage).find(k => k.includes('bills'));
+      return k ? JSON.parse(localStorage.getItem(k)).data.filter(b => String(b.incremental_code)===code) : [];
+    } catch { return []; }
+  })().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+
+  const relatedPayments = (() => {
+    try {
+      const k = Object.keys(localStorage).find(k => k.includes('prepayments'));
+      const billIds = new Set(relatedBills.map(b => String(b.bill_id||b.id)));
+      return k ? JSON.parse(localStorage.getItem(k)).data.filter(p => billIds.has(String(p.bill_id||''))) : [];
+    } catch { return []; }
+  })().sort((a,b) => new Date(b.prepayment_date||0) - new Date(a.prepayment_date||0));
+
+  const docTabs = [
+    {k:'devis', label:`Devis (${relatedQuotes.length})`},
+    {k:'factures', label:`Factures (${relatedBills.length})`},
+    {k:'paiements', label:`Paiements (${relatedPayments.length})`},
+  ];
+
   return <div>
     <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
-    <div style={{padding:'20px 16px 24px'}}>
+    <div style={{padding:'20px 16px 8px'}}>
       {event.status_name&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
         <Badge label={event.status_name} color={T.brand}/>
       </div>}
@@ -396,7 +427,9 @@ function EventDetail({event,onBack}) {
           <div style={{fontSize:13.5,fontWeight:700,color:f.accent}}>{f.value}</div>
         </div>)}
       </div>}
-      <Card>
+
+      {/* Infos event */}
+      <Card style={{marginBottom:16}}>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {(f.label==='Email'&&f.value&&f.value!=='null')?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
@@ -404,6 +437,68 @@ function EventDetail({event,onBack}) {
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
+    </div>
+
+    {/* Onglets Devis / Factures / Paiements */}
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7}}>
+      {docTabs.map(t=><button key={t.k} onClick={()=>setDocTab(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 4px',fontSize:12,fontWeight:docTab===t.k?600:400,color:docTab===t.k?T.brand:T.textMuted,borderBottom:docTab===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
+    </div>
+
+    <div style={{padding:'12px 16px 32px'}}>
+      {/* Devis */}
+      {docTab==='devis'&&(relatedQuotes.length===0
+        ?<Empty icon={FileText} msg="Aucun devis pour cet événement."/>
+        :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relatedQuotes.map((q,i)=><Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{q.title||q.nb||'Devis'}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{q.nb} · {date(q.date_of_quote)}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(q.ttc)}</div>
+                {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+
+      {/* Factures */}
+      {docTab==='factures'&&(relatedBills.length===0
+        ?<Empty icon={Receipt} msg="Aucune facture pour cet événement."/>
+        :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relatedBills.map((b,i)=><Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{b.title||b.nb||'Facture'}</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{b.nb} · {date(b.date)}</div>
+                {b.contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{b.contact_name}</div>}
+              </div>
+              <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
+                {b.status&&<Badge label={b.status} color={/pay[ée]/i.test(b.status)?T.success:/annul/i.test(b.status)?T.danger:T.warning}/>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
+
+      {/* Paiements */}
+      {docTab==='paiements'&&(relatedPayments.length===0
+        ?<Empty icon={CreditCard} msg="Aucun paiement pour cet événement."/>
+        :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {relatedPayments.map((p,i)=><Card key={i} style={{padding:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{p.bill_number||'Paiement'}</div>
+                <div style={{fontSize:12,color:T.textMuted}}>{date(p.prepayment_date)} · {p.payment_type||'—'}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.success}}>{money(p.prepayment_amount)}</div>
+                {p.remaining_balance!=null&&<div style={{fontSize:11,color:T.textMuted}}>Reste : {money(p.remaining_balance)}</div>}
+              </div>
+            </div>
+          </Card>)}
+        </div>)}
     </div>
   </div>;
 }
