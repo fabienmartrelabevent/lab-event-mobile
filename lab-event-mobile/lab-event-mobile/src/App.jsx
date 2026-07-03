@@ -538,11 +538,15 @@ function EventDetail({event, onBack, session}) {
       {docTab==='planning'&&(
         schedulerLoading?<div style={{textAlign:'center',padding:32}}><Loader2 size={20} color={T.brand} style={{animation:'spin 1s linear infinite'}}/></div>
         :schedulerErr?<ErrBanner msg={schedulerErr}/>
-        :!event.event_id?<Empty icon={Calendar} msg="Identifiant d'événement non disponible."/>
         :(!schedulerData||schedulerData.length===0)?<Empty icon={Calendar} msg="Aucune réservation de salle trouvée pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {/* DEBUG - affiche les champs du 1er item */}
+          <Card style={{padding:12,background:`${T.warning}11`,border:`1px solid ${T.warning}44`}}>
+            <div style={{fontSize:10.5,color:T.textMuted,marginBottom:4,fontWeight:600}}>DEBUG — Champs disponibles :</div>
+            <div style={{fontSize:10,color:T.ink,fontFamily:'monospace',wordBreak:'break-all'}}>{JSON.stringify(schedulerData[0],null,1).substring(0,400)}</div>
+          </Card>
           {schedulerData.map((r,i)=>{
-            const room=r.product_real_name||r.room_name||r.room||'—';
+            const room=r.product_real_name||r.room_name||r.room||r.name||r.title||'—';
             const start=r.start_at?r.start_at.substring(0,16).replace('T',' '):'—';
             const end=r.end_at?r.end_at.substring(0,16).replace('T',' '):'';
             return <Card key={i} style={{padding:14}}>
