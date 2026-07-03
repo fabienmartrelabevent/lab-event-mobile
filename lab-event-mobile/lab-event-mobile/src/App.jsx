@@ -1263,9 +1263,8 @@ function CreateContactForm({session,companies,onDone}) {
         <label style={{display:'block',fontSize:13,fontWeight:500,color:'#464e5f',marginBottom:6}}>Civilité</label>
         <select value={civility} onChange={e=>setCivility(e.target.value)} style={{...inp,marginBottom:14}}>
           <option value="">—</option>
-          <option value="M">M.</option>
-          <option value="Mme">Mme</option>
-          <option value="Dr">Dr</option>
+          <option value="2">M.</option>
+          <option value="1">Mme</option>
         </select>
       </div>
       <div style={{flex:1}}>
