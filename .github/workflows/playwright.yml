@@ -15,7 +15,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd lab-event-mobile/lab-event-mobile
-        npm install -g @playwright/test
+        npm install
         npx playwright install --with-deps
     - name: Run Playwright tests
       run: |
