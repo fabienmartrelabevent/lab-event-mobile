@@ -7,6 +7,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab-event-mobile/lab-event-mobile
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
@@ -14,10 +17,8 @@ jobs:
         node-version: 18
     - name: Install dependencies
       run: |
-        cd lab-event-mobile/lab-event-mobile
         npm install
         npx playwright install --with-deps
     - name: Run Playwright tests
       run: |
-        cd lab-event-mobile/lab-event-mobile
         npx playwright test tests/recette.spec.ts
