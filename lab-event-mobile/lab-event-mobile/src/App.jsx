@@ -454,7 +454,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
       .finally(()=>setSchedulerLoading(false));
   },[docTab, event, session]);
 
-  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onEventClick={ev=>{setSelectedDoc(null);}} />;
+  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
   if(selectedDoc?.type==='bill') return <BillDetail bill={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
 
   return <div>
@@ -772,7 +772,7 @@ function safeStr(v) {
   return String(v);
 }
 
-function QuoteDetail({quote:q, session, onBack}) {
+function QuoteDetail({quote:q, session, onBack, onEventClick}) {
   const [lines,setLines]=useState(null);
   const [renta,setRenta]=useState(null);
   const [loadingLines,setLoadingLines]=useState(true);
@@ -1155,8 +1155,8 @@ function Activites({session, onEventClick, onCompanyClick}) {
 
   const allRaw=items||[];
   const all=applyDateFilter(allRaw,'date_from',period);
-  const expired=all.filter(a=>a.deadline_is_expired===true||(a.deadline_is_expired&&a.deadline_is_expired!==false));
-  const soon=all.filter(a=>a.deadline_is_soon_expired&&!a.deadline_is_expired);
+  const expired=all.filter(a=>!!a.deadline_is_expired);
+  const soon=all.filter(a=>!!a.deadline_is_soon_expired&&!a.deadline_is_expired);
 
   const q=search.toLowerCase();
   const bySorted=[...all].sort((a,b)=>new Date(b.date||b.deadline||0)-new Date(a.date||a.deadline||0));
@@ -1255,7 +1255,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
     }).catch(()=>{});
   },[company.id,session]);
 
-  const co = details || company; // Use API details if available
+  const co = details || company || {}; // Use API details if available
   const linked = allCustomers.filter(c =>
     c.company?.id === company.id ||
     c.company?.name?.toLowerCase() === (company.name||'').toLowerCase()
