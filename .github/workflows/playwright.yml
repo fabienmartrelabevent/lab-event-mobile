@@ -21,5 +21,9 @@ jobs:
         npm install @playwright/test
         npx playwright install --with-deps
     - name: Run Playwright tests
+      env:
+        # Le serveur va chercher tes secrets et les donne temporairement au script
+        PLAYWRIGHT_SUBDOMAIN: ${{ secrets.MY_SUBDOMAIN }}
+        PLAYWRIGHT_TOKEN: ${{ secrets.MY_TOKEN }}
       run: |
         npx playwright test tests/recette.spec.ts
