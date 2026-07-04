@@ -1,0 +1,23 @@
+name: Playwright Tests
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+    - name: Install dependencies
+      run: |
+        cd lab-event-mobile/lab-event-mobile
+        npm install -g @playwright/test
+        npx playwright install --with-deps
+    - name: Run Playwright tests
+      run: |
+        cd lab-event-mobile/lab-event-mobile
+        npx playwright test tests/recette.spec.ts
