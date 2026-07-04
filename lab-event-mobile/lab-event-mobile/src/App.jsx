@@ -1154,7 +1154,7 @@ function Activites({session, onEventClick, onCompanyClick}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const allRaw=items||[];
-  const all=applyDateFilter(allRaw,'date_from',period);
+  const all=allRaw; // No date filter in activities (use all data, filter by deadline status)
   const expired=all.filter(a=>!!a.deadline_is_expired);
   const soon=all.filter(a=>!!a.deadline_is_soon_expired&&!a.deadline_is_expired);
 
