@@ -497,8 +497,8 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
       {/* CA Cards */}
       {[money(event.quotes_sell_price_sign),money(event.quotes_sell_price),money(event.total_marge)].some(v=>v!=='—')&&<div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
         {[
-          {label:'CA signé TTC',value:money(event.quotes_sell_price_sign),accent:T.success},
-          {label:'CA total TTC',value:money(event.quotes_sell_price),accent:T.brand},
+          {label:'CA signé HT',value:money(event.quotes_sell_price_sign),accent:T.success},
+          {label:'CA total HT',value:money(event.quotes_sell_price),accent:T.brand},
           {label:'Marge',value:money(event.total_marge),accent:T.info},
         ].filter(f=>f.value!=='—').map((f,i)=><div key={i} style={{flex:1,minWidth:90,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
           <div style={{fontSize:10.5,color:T.textMuted,marginBottom:2}}>{f.label}</div>
