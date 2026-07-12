@@ -687,7 +687,7 @@ function Events({session, onCompanyClick, initialFilter={}}) {
       <button onClick={()=>setPipeline('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!pipeline?T.brand:T.border}`,background:!pipeline?T.brandTint:'none',color:!pipeline?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!pipeline?600:400}}>Tous</button>
       {pipelines.map(p=><button key={p} onClick={()=>setPipeline(p===pipeline?'':p)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${pipeline===p?T.brand:T.border}`,background:pipeline===p?T.brandTint:'none',color:pipeline===p?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:pipeline===p?600:400}}>{p}</button>)}
     </div>}
-    {upcomingOnly&&<div style={{background:`${T.brand}12`,border:`1px solid ${T.brand}33`,borderRadius:8,padding:'6px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}><span style={{color:T.brand,fontWeight:500}}>📅 Événements à venir uniquement</span><button onClick={()=>setUpcomingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12}}>✕ Tout voir</button></div>}
+    {upcomingOnly&&<div style={{background:`${T.brand}12`,border:`1.5px solid ${T.brand}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.brand,fontWeight:600}}>📅 Événements à venir uniquement</span><button onClick={()=>setUpcomingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} événement{filtered.length>1?'s':''}{(q||pipeline||datePeriod||upcomingOnly)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucun événement."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -983,12 +983,12 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
     (d.customer||'').toLowerCase().includes(q)||
     (d.status||'').toLowerCase().includes(q)
   ):bySignedMonth;
-  return <div style={{padding:16}}>
-    {pendingOnly&&<div style={{background:`${T.warning}12`,border:`1px solid ${T.warning}33`,borderRadius:8,padding:'6px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}><span style={{color:T.warning,fontWeight:500}}>📋 Devis en cours uniquement</span><button onClick={()=>setPendingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12}}>✕ Tout voir</button></div>}
-    {signedThisMonth&&<div style={{background:`${T.success}12`,border:`1px solid ${T.success}33`,borderRadius:8,padding:'6px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}><span style={{color:T.success,fontWeight:500}}>✅ Devis signés ce mois</span><button onClick={()=>setSignedThisMonth(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12}}>✕ Tout voir</button></div>}
+  return <div style={{padding:'16px 16px 16px'}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
     <DateFilter value={datePeriod} onChange={setDatePeriod}/>
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
+    {pendingOnly&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.warning,fontWeight:600}}>📋 Devis en cours uniquement</span><button onClick={()=>setPendingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
+    {signedThisMonth&&<div style={{background:`${T.success}12`,border:`1.5px solid ${T.success}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.success,fontWeight:600}}>✅ Devis signés ce mois</span><button onClick={()=>setSignedThisMonth(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod||pendingOnly||signedThisMonth)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={FileText} msg={q?"Aucun résultat.":"Aucun devis."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((item,i)=><Card key={item.quote_id||i} onClick={()=>setSelected(item)} style={{padding:14}}>
