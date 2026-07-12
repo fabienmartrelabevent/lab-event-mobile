@@ -19,8 +19,8 @@ const T = {
 
 // ─── API ─────────────────────────────────────────────────────────
 const PROXY = 'https://lab-event-proxy.vercel.app';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes avant rafraîchissement silencieux
-const CACHE_MAX = 30 * 60 * 1000; // 30 minutes max (force refresh)
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes avant rafraîchissement silencieux
+const CACHE_MAX = 2 * 60 * 60 * 1000; // 2 heures max (force refresh)
 
 function buildSubdomain(s) {
   return s.trim().replace(/^https?:\/\//,'').replace(/\.lab-event\.com.*$/,'').replace(/\/$/,'');
@@ -94,7 +94,10 @@ async function api(subdomain, token, path, { method='GET', body }={}) {
 
 // apiCached : retourne le cache immédiatement, rafraîchit en arrière-plan si besoin
 async function apiCached(subdomain, token, path, opts={}, onRefresh) {
-  const key = cacheKey(subdomain, path + JSON.stringify(opts.body||''));
+  // Use stable key (path only, not body) for analytics endpoints
+  // This ensures the stale-while-revalidate works properly across sessions
+  const isAnalytics = path.includes('/v3/analytics/') || path.includes('/v3/scheduler');
+  const key = isAnalytics ? cacheKey(subdomain, path) : cacheKey(subdomain, path + JSON.stringify(opts.body||''));
   const cached = cacheGet(key);
 
   if (cached && cached.age < CACHE_MAX) {
@@ -722,23 +725,28 @@ function Planning({session}) {
 // ─── Date Filter ─────────────────────────────────────────────────
 function DateFilter({value, onChange}) {
   const opts=[
+    {k:'30d', label:'30 j'},
+    {k:'90d', label:'90 j'},
+    {k:'6m', label:'6 mois'},
+    {k:'year', label:'1 an'},
     {k:'', label:'2 ans'},
-    {k:'year', label:'Cette année'},
-    {k:'month', label:'Ce mois'},
-    {k:'quarter', label:'Ce trimestre'},
   ];
-  return <div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-    {opts.map(o=><button key={o.k} onClick={()=>onChange(o.k)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${value===o.k?T.brand:T.border}`,background:value===o.k?T.brandTint:'none',color:value===o.k?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:value===o.k?600:400}}>{o.label}</button>)}
+  return <div style={{display:'flex',gap:5,marginBottom:10}}>
+    {opts.map(o=><button key={o.k||'all'} onClick={()=>onChange(o.k)} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${value===o.k?T.brand:T.border}`,background:value===o.k?T.brandTint:'none',color:value===o.k?T.brand:T.textMuted,fontSize:11.5,cursor:'pointer',fontWeight:value===o.k?600:400}}>{o.label}</button>)}
   </div>;
 }
 function applyDateFilter(items, dateField, period) {
   if (!period) return items;
   const now = new Date();
-  let from;
-  if (period==='12m') from=new Date(now.getFullYear()-1,now.getMonth(),now.getDate());
-  else if (period==='month') from=new Date(now.getFullYear(),now.getMonth(),1);
-  else if (period==='quarter') from=new Date(now.getFullYear(),Math.floor(now.getMonth()/3)*3,1);
-  else if (period==='year') from=new Date(now.getFullYear(),0,1);
+  let from = new Date(now);
+  if (period==='30d') from.setDate(from.getDate()-30);
+  else if (period==='90d') from.setDate(from.getDate()-90);
+  else if (period==='6m') from.setMonth(from.getMonth()-6);
+  else if (period==='year'||period==='12m') from.setFullYear(from.getFullYear()-1);
+  // Legacy calendar periods
+  else if (period==='month') { from=new Date(now.getFullYear(),now.getMonth(),1); }
+  else if (period==='quarter') { from=new Date(now.getFullYear(),Math.floor(now.getMonth()/3)*3,1); }
+  else return items;
   return items.filter(i=>i[dateField]&&new Date(i[dateField])>=from);
 }
 
