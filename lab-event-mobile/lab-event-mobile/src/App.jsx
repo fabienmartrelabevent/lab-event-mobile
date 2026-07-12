@@ -276,8 +276,8 @@ function Dashboard({session,onEventClick}) {
     setLoading(true);setErr('');
     try {
       const [e,q]=await Promise.all([
-        api(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}}),
-        api(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}}),
+        apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setEvents(Array.isArray(d)?d:[]);}).then(d=>d),
+        apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setQuotes(Array.isArray(d)?d:[]);}).then(d=>d),
       ]);
       setEvents(Array.isArray(e)?e:[]);
       setQuotes(Array.isArray(q)?q:[]);
@@ -292,22 +292,33 @@ function Dashboard({session,onEventClick}) {
 
   const now=new Date();
   const thisMonth=new Date(now.getFullYear(),now.getMonth(),1);
+
+  // Events filtrés
   const upcoming=(events||[]).filter(e=>e.events_date_from&&new Date(e.events_date_from)>=now).sort((a,b)=>new Date(a.events_date_from)-new Date(b.events_date_from));
-  const pending=(quotes||[]).filter(q=>!/sign|annul|rejet/i.test(q.status||''));
-  const totalSigned=(events||[]).reduce((s,e)=>s+(Number(e.quotes_sell_price_sign)||0),0);
   const won=(events||[]).filter(e=>e.win_lost==='Gagné').length;
   const lost=(events||[]).filter(e=>e.win_lost==='Perdu').length;
-  const inProgress=(events||[]).filter(e=>!e.win_lost||e.win_lost==='En cours').length;
-  const signedThisMonth=(quotes||[]).filter(q=>q.date_of_quote&&new Date(q.date_of_quote)>=thisMonth&&/sign/i.test(q.status||''));
+  // En cours = events avec win_lost = 'En cours' OU sans valeur win_lost
+  const inProgress=(events||[]).filter(e=>!e.win_lost||e.win_lost==='En cours'||e.win_lost==='En Cours').length;
+
+  // Quotes filtrés
+  const pending=(quotes||[]).filter(q=>!/sign|annul|rejet/i.test(q.status||''));
+  const allSigned=(quotes||[]).filter(q=>/^sign[ée]/i.test(q.status||''));
+  const totalSigned=allSigned.reduce((s,q)=>s+(Number(q.ttc)||0),0);
+  const signedThisMonth=allSigned.filter(q=>q.date_of_quote&&new Date(q.date_of_quote)>=thisMonth);
   const caThisMonth=signedThisMonth.reduce((s,q)=>s+(Number(q.ttc)||0),0);
 
+  const periodLabel = `Sur 2 ans (depuis ${new Date(dateJ2Ans()).toLocaleDateString('fr-FR',{month:'short',year:'numeric'})})`;
+
   return <div style={{padding:16}}>
-    <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+    {/* KPIs */}
+    <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:4}}>
       <StatCard icon={Calendar} label="À venir" value={upcoming.length} accent={T.brand}/>
       <StatCard icon={FileText} label="Devis en cours" value={pending.length} accent={T.warning}/>
-      <StatCard icon={Euro} label="CA signé total" value={money(totalSigned)} accent={T.success}/>
-      <StatCard icon={Euro} label="CA ce mois" value={money(caThisMonth)} accent={T.info}/>
+      <StatCard icon={Euro} label="CA signé TTC" value={money(totalSigned)} accent={T.success}/>
+      <StatCard icon={Euro} label="CA signé ce mois" value={money(caThisMonth)} accent={T.info}/>
     </div>
+    <div style={{fontSize:10.5,color:T.textSubtle,marginBottom:14,textAlign:'right'}}>{periodLabel}</div>
+
     {/* Pipeline */}
     <div style={{display:'flex',gap:8,marginBottom:16}}>
       {[{label:'En cours',val:inProgress,color:T.info},{label:'Gagnés',val:won,color:T.success},{label:'Perdus',val:lost,color:T.danger}].map(p=><div key={p.label} style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'10px 8px',textAlign:'center'}}>
@@ -315,7 +326,8 @@ function Dashboard({session,onEventClick}) {
         <div style={{fontSize:11,color:T.textMuted}}>{p.label}</div>
       </div>)}
     </div>
-    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'16px 0 10px'}}>Prochains événements</h2>
+
+    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 10px'}}>Prochains événements</h2>
     {upcoming.length===0?<Empty icon={Calendar} msg="Aucun événement à venir."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {upcoming.slice(0,5).map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>onEventClick(ev)}/>)}
@@ -1804,6 +1816,7 @@ export default function App() {
   const [eventDetail,setEventDetail]=useState(null);
   const [companyDetailOverride,setCompanyDetailOverride]=useState(null);
   const [drawerOpen,setDrawerOpen]=useState(false);
+  const [showSupport,setShowSupport]=useState(false);
 
   // Helper to prefetch all data for a session
   const prefetchAll = s => {
@@ -1849,7 +1862,7 @@ export default function App() {
     {k:'activites',label:'Activités',icon:Activity},
     {k:'contacts',label:'Contacts',icon:Users},
   ];
-  const extraTabs=['prestataires','rentabilite','analytics','scheduler','planning','articles','planningbyday'];
+  const extraTabs=['prestataires','rentabilite','analytics','scheduler','planning','articles','planningbyday','support'];
   const navTo=k=>{setTab(k);setDrawerOpen(false);if(k!=='events')setEventDetail(null);};
   const drawerGroups=[
     {section:'Principal',items:[
@@ -1871,6 +1884,12 @@ export default function App() {
     ]},
     {section:'Catalogue',items:[
       {k:'articles',label:'Articles',icon:FileText},
+    ]},
+    {section:'Aide',items:[
+      {k:'support',label:'Support & Aide',icon:Activity},
+    ]},
+    {section:'Aide',items:[
+      {k:'support',label:'Support & Aide',icon:FileText},
     ]},
   ];
 
@@ -1936,6 +1955,8 @@ export default function App() {
       {tab==='scheduler'&&<SchedulerView session={session}/>}
       {tab==='articles'&&<Articles session={session}/>}
       {tab==='planningbyday'&&<PlanningByDay session={session}/>}
+      {tab==='support'&&<Support onBack={()=>setTab('dashboard')}/>}
+      {tab==='support'&&<Support onBack={()=>setTab('dashboard')}/>}
     </div>
     {/* Bottom nav */}
     {!extraTabs.includes(tab)&&<div style={{position:'fixed',bottom:0,left:0,right:0,background:T.surface,borderTop:`1px solid ${T.border}`,display:'flex',boxShadow:'0 -4px 16px rgba(16,24,40,0.06)'}}>
@@ -2569,6 +2590,184 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
             </div>
           </Card>)}
         </div>)}
+    </div>
+  </div>;
+}
+
+// ─── Support ──────────────────────────────────────────────────────
+const SUPPORT_CONTENT = [
+  {
+    section: 'Aperçu',
+    icon: '📊',
+    items: [
+      { label: 'À venir', desc: 'Nombre d\'événements dont la date de début est dans le futur (données sur 2 ans).' },
+      { label: 'Devis en cours', desc: 'Devis actifs : ni signés, ni annulés, ni rejetés. Tous les devis "vivants".' },
+      { label: 'CA signé total', desc: 'Somme TTC des devis signés par le client, sur tous les événements des 2 dernières années.' },
+      { label: 'CA ce mois', desc: 'CA TTC des devis signés dont la date d\'émission est dans les 30 derniers jours.' },
+      { label: 'Pipeline En cours / Gagnés / Perdus', desc: 'Comptage des événements par résultat commercial (champ "win_lost" de chaque événement).' },
+      { label: 'Prochains événements', desc: 'Les 5 prochains événements futurs, triés par date de début.' },
+    ]
+  },
+  {
+    section: 'Événements',
+    icon: '📅',
+    items: [
+      { label: 'Liste', desc: 'Tous les événements des 2 dernières années, triés du plus récent au plus ancien.' },
+      { label: 'Filtres pipeline', desc: 'Filtrer par résultat : Tous / En Cours / Gagné / Perdu.' },
+      { label: 'Filtres date', desc: 'Fenêtres glissantes : 30j / 90j / 6 mois / 1 an / 2 ans à partir d\'aujourd\'hui.' },
+      { label: 'Fiche événement', desc: 'CA signé, CA total, marge. Onglets : Devis, Factures, Paiements, Activités, Planning (réservations de salles).' },
+      { label: 'Société cliquable', desc: 'Cliquer sur le nom de la société ouvre la fiche société.' },
+    ]
+  },
+  {
+    section: 'Finances',
+    icon: '💶',
+    items: [
+      { label: 'Devis / Factures / Paiements', desc: 'Données des 2 dernières années par défaut. Filtres par fenêtre glissante (30j, 90j, 6m, 1an, 2ans).' },
+      { label: 'Clé de tri', desc: 'Devis triés par date d\'émission. Factures par date de facture. Paiements par date de virement.' },
+      { label: 'Lignes de devis/facture', desc: 'Les articles proviennent de vue-analytics-light. Ils apparaissent 2-3 secondes après ouverture (chargement à la demande).' },
+      { label: 'TVA', desc: 'Affichée sous forme "10% : 87 € · 20% : 47 €" (taux : montant HT).' },
+    ]
+  },
+  {
+    section: 'Activités',
+    icon: '✅',
+    items: [
+      { label: 'Filtres', desc: 'Toutes / En retard (deadline_is_expired) / Bientôt (deadline_is_soon_expired mais pas encore expiré).' },
+      { label: 'Voir événement / Voir client', desc: 'Navigue directement vers la fiche événement ou société dans l\'app.' },
+      { label: 'Données', desc: 'Activités sur 2 ans, triées par date décroissante.' },
+    ]
+  },
+  {
+    section: 'Contacts',
+    icon: '👥',
+    items: [
+      { label: 'Sociétés', desc: 'Toutes les sociétés clientes. Cliquer ouvre la fiche avec contacts liés, événements, devis, factures, activités.' },
+      { label: 'Contacts', desc: 'Tous les contacts. Cliquer ouvre la fiche avec ses activités, événements, devis.' },
+      { label: 'Recherche', desc: 'Filtre en temps réel sur le nom, la ville (sociétés) ou le nom, email, poste (contacts).' },
+      { label: 'Données fraîches', desc: 'Sociétés et contacts sont chargés en pagination complète (toutes les pages).' },
+    ]
+  },
+  {
+    section: 'Rentabilité',
+    icon: '📈',
+    items: [
+      { label: 'Données', desc: 'Agrégation de toutes les lignes de devis/factures par section (Hébergement, Restauration, Animation…).' },
+      { label: 'Filtre Signés uniquement', desc: 'Filtre sur les statuts commençant par "Signé" (Signé par le client, Signé électroniquement…).' },
+      { label: 'Filtre période', desc: 'Fenêtres glissantes : 30j / 90j / 6m / 1an / 2ans sur la date de l\'événement.' },
+      { label: 'Taux de marge', desc: 'Marge / CA vendu × 100. Vert ≥ 30%, Orange ≥ 15%, Rouge < 15%.' },
+    ]
+  },
+  {
+    section: 'Analytics produits',
+    icon: '🛍️',
+    items: [
+      { label: 'Données', desc: 'Agrégation des lignes de devis/factures par article (good_name). Total CA = somme de tous les sell_price.' },
+      { label: 'Filtre section', desc: 'Liste déroulante pour filtrer par section (product_name).' },
+      { label: 'Tri', desc: 'Par CA décroissant ou par volume (nombre de fois vendu).' },
+      { label: '× vendu', desc: 'Nombre d\'occurrences de l\'article dans les documents de la période.' },
+    ]
+  },
+  {
+    section: 'Cache & données',
+    icon: '⚡',
+    items: [
+      { label: 'Rafraîchissement', desc: 'Données affichées instantanément depuis le cache. Rafraîchissement silencieux en arrière-plan après 30 min. Forçage du re-fetch après 2h.' },
+      { label: 'Prefetch au login', desc: 'Toutes les sections sont chargées en arrière-plan dès la connexion pour une navigation fluide.' },
+      { label: 'Factures/devis récents', desc: 'Si un document vient d\'être créé dans Lab-event, patienter 2h maximum ou recharger la page pour qu\'il apparaisse.' },
+    ]
+  },
+];
+
+
+// ─── Support / Aide ───────────────────────────────────────────────
+function Support({onBack}) {
+  const [open,setOpen]=useState(null);
+  const sections=[
+    {
+      id:'apercu', title:'Aperçu', icon:'📊',
+      items:[
+        {q:'À venir', a:'Nombre d\'événements dont la date de début est supérieure à aujourd\'hui. Source : analytics/events sur les 2 dernières années.'},
+        {q:'Devis en cours', a:'Devis dont le statut n\'est pas "Signé", "Annulé" ou "Rejeté". Correspond aux opportunités actives sur 2 ans.'},
+        {q:'CA signé TTC', a:'Somme du TTC de tous les devis avec statut commençant par "Signé" (Signé par le client, Signé électroniquement...) sur les 2 dernières années.'},
+        {q:'CA signé ce mois', a:'CA TTC des devis signés dont la date d\'émission est dans le mois en cours. ⚠️ Basé sur la date du devis, pas la date de signature.'},
+        {q:'En cours / Gagnés / Perdus', a:'"Gagnés" et "Perdus" = champ win_lost de l\'événement. "En cours" = events sans valeur win_lost ou avec win_lost = "En cours".'},
+      ]
+    },
+    {
+      id:'events', title:'Événements', icon:'📅',
+      items:[
+        {q:'Source des données', a:'Endpoint analytics/events, limité aux 2 dernières années. Chaque event contient : nom, client, société, statut, CA signé, CA total, marge.'},
+        {q:'Filtres date', a:'Fenêtres glissantes : 30j, 90j, 6 mois, 1 an, 2 ans. S\'applique sur la date de début de l\'événement.'},
+        {q:'Filtres pipeline', a:'Tous / En cours / Gagné / Perdu — basé sur le champ win_lost.'},
+        {q:'Onglets dans le détail', a:'Devis, Factures, Paiements filtrés par incremental_code (code numérique de l\'event). Activités filtrées par event_name. Planning depuis vue-planning filtré par incremental_code.'},
+      ]
+    },
+    {
+      id:'finances', title:'Finances', icon:'💶',
+      items:[
+        {q:'Devis', a:'Source : analytics/finance-documents/quotes. Contient le titre, numéro, statut, montants HT/TTC/Marge/Commission, lignes de produits via vue-analytics-light.'},
+        {q:'Factures', a:'Source : analytics/finance-documents/bills. Même structure que devis.'},
+        {q:'Paiements', a:'Source : analytics/bill-prepayments. Montants encaissés par facture avec reste à percevoir.'},
+        {q:'Lignes de produits', a:'Chargées depuis vue-analytics-light filtré par document_id (= quote_id ou bill_id). Fenêtre de 60 jours autour de la date du document pour éviter de charger trop de données.'},
+        {q:'Filtres date', a:'30j, 90j, 6 mois, 1 an, 2 ans — fenêtres glissantes à partir d\'aujourd\'hui.'},
+      ]
+    },
+    {
+      id:'rentabilite', title:'Rentabilité', icon:'📈',
+      items:[
+        {q:'Source', a:'analytics/finance-documents/rentability — une ligne par section de devis (Hébergement, Restauration...) avec CA vendu, marge et commission.'},
+        {q:'Filtre Signés uniquement', a:'Garde uniquement les lignes dont le statut commence par "Signé". Recommandé pour voir le CA réel.'},
+        {q:'Filtre Tous les documents', a:'Inclut devis brouillons, finalisés, proformas — utile pour voir le potentiel total.'},
+        {q:'Taux de marge', a:'= Marge / CA vendu × 100. Code couleur : vert ≥30%, orange ≥15%, rouge <15%.'},
+      ]
+    },
+    {
+      id:'analytics', title:'Analytics produits', icon:'🏷️',
+      items:[
+        {q:'Source', a:'analytics/finance-documents/vue-analytics-light — une ligne par article dans chaque document (devis/facture). Agrégé par good_name.'},
+        {q:'CA', a:'Somme des sell_price de toutes les occurrences de cet article sur la période.'},
+        {q:'× vendus', a:'Nombre de fois où cet article apparaît dans des documents sur la période.'},
+        {q:'PU moyen', a:'Prix unitaire moyen calculé sur les occurrences avec un prix > 0.'},
+      ]
+    },
+    {
+      id:'contacts', title:'Contacts & Sociétés', icon:'👥',
+      items:[
+        {q:'Source', a:'GET /v3/customer-company (sociétés) et GET /v3/customers (contacts), pagination complète via fetchAllPages.'},
+        {q:'Fiche société', a:'Données enrichies via /v3/customer-company/{id} : adresse, SIRET, TVA, site web. Onglets : Contacts liés, Événements, Devis/Factures, Activités — tous filtrés par nom de société.'},
+        {q:'Fiche contact', a:'Onglets : Infos, Événements, Devis, Activités — filtrés par nom du contact et/ou société.'},
+      ]
+    },
+    {
+      id:'cache', title:'Données & Rafraîchissement', icon:'🔄',
+      items:[
+        {q:'Mise en cache', a:'Toutes les données sont mises en cache local pour un affichage instantané. TTL : 30 min (rafraîchissement silencieux) → 2h (rechargement forcé).'},
+        {q:'Données obsolètes', a:'Si les données semblent anciennes, faites une déconnexion/reconnexion pour forcer un rechargement complet.'},
+        {q:'Période couverte', a:'Toutes les sections couvrent les 2 dernières années par défaut, sauf les filtres de période qui réduisent la fenêtre.'},
+        {q:'Nouvelles données', a:'Les événements/devis créés très récemment apparaîtront après le prochain rafraîchissement automatique (max 2h).'},
+      ]
+    },
+  ];
+
+  return <div>
+    <BackHeader title="Support & Aide" onBack={onBack}/>
+    <div style={{padding:'16px 16px 32px'}}>
+      <div style={{background:T.brandSubtle,border:`1px solid ${T.brandTint}`,borderRadius:10,padding:'12px 14px',marginBottom:16,fontSize:13,color:T.brandStrong,lineHeight:1.6}}>
+        Cette section explique comment chaque écran calcule ses données et d'où elles proviennent. Elle sera enrichie au fil du temps.
+      </div>
+      {sections.map(s=><div key={s.id} style={{marginBottom:12}}>
+        <button onClick={()=>setOpen(open===s.id?null:s.id)} style={{width:'100%',background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',textAlign:'left'}}>
+          <span style={{fontSize:14,fontWeight:600,color:T.ink}}>{s.icon} {s.title}</span>
+          <span style={{fontSize:16,color:T.textMuted,transform:open===s.id?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▾</span>
+        </button>
+        {open===s.id&&<div style={{border:`1px solid ${T.border}`,borderTop:'none',borderRadius:'0 0 10px 10px',overflow:'hidden'}}>
+          {s.items.map((item,i)=><div key={i} style={{padding:'12px 16px',borderBottom:i<s.items.length-1?`1px solid ${T.border}`:'none',background:i%2===0?T.surface:`${T.surfaceMuted}`}}>
+            <div style={{fontSize:13,fontWeight:600,color:T.ink,marginBottom:4}}>❓ {item.q}</div>
+            <div style={{fontSize:12.5,color:T.textMuted,lineHeight:1.6}}>{item.a}</div>
+          </div>)}
+        </div>}
+      </div>)}
     </div>
   </div>;
 }
