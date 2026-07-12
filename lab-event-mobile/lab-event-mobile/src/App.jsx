@@ -647,14 +647,15 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
 }
 
 // ─── Events list ─────────────────────────────────────────────────
-function Events({session, onCompanyClick}) {
+function Events({session, onCompanyClick, initialFilter={}}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState(null);
   const [search,setSearch]=useState('');
-  const [pipeline,setPipeline]=useState('');
-  const [datePeriod,setDatePeriod]=useState('');
+  const [pipeline,setPipeline]=useState(initialFilter.pipeline||'');
+  const [datePeriod,setDatePeriod]=useState(initialFilter.datePeriod||'');
+  const [upcomingOnly,setUpcomingOnly]=useState(initialFilter.upcomingOnly||false);
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
