@@ -374,7 +374,7 @@ function EventRow({event,onClick}) {
 
 // ─── Sticky back header ──────────────────────────────────────────
 function BackHeader({title, subtitle, onBack, badge}) {
-  return <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'0 16px',position:'sticky',top:60,zIndex:8,display:'flex',alignItems:'center',gap:10,minHeight:52,boxShadow:'0 2px 8px rgba(16,24,40,0.04)'}}>
+  return <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:'0 16px',position:'sticky',top:0,zIndex:8,display:'flex',alignItems:'center',gap:10,minHeight:52,boxShadow:'0 2px 8px rgba(16,24,40,0.04)'}}>
     <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:T.brand,display:'flex',alignItems:'center',gap:4,fontSize:13,fontWeight:600,flexShrink:0,padding:'12px 0'}}>
       <ChevronLeft size={18}/> Retour
     </button>
@@ -519,7 +519,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     </div>
 
     {/* Onglets Devis / Factures / Paiements */}
-    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7}}>
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:52,zIndex:7}}>
       {docTabs.map(t=><button key={t.k} onClick={()=>setDocTab(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 4px',fontSize:12,fontWeight:docTab===t.k?600:400,color:docTab===t.k?T.brand:T.textMuted,borderBottom:docTab===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
     </div>
 
@@ -787,7 +787,7 @@ function Finances({session, initialFilter={}}) {
   const [inDetail,setInDetail]=useState(false);
   const tabs=[{k:'quotes',label:'Devis'},{k:'bills',label:'Factures'},{k:'payments',label:'Paiements'}];
   return <div>
-    {!inDetail&&<div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
+    {!inDetail&&<div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:0,zIndex:5}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setSub(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent',transition:'all 0.18s'}}>{t.label}</button>)}
     </div>}
     {sub==='quotes'&&<Quotes session={session} onDetailChange={setInDetail} initialFilter={quotesFilter}/>}
@@ -1357,7 +1357,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
     </div>
 
     {/* Onglets */}
-    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7,overflowX:'auto'}}>
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:52,zIndex:7,overflowX:'auto'}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{flexShrink:0,background:'none',border:'none',cursor:'pointer',padding:'10px 10px',fontSize:11.5,fontWeight:tab===t.k?600:400,color:tab===t.k?T.brand:T.textMuted,borderBottom:tab===t.k?`2px solid ${T.brand}`:'2px solid transparent',whiteSpace:'nowrap'}}>{t.label}</button>)}
     </div>
 
@@ -1498,7 +1498,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
   const tabs=[{k:'companies',label:`Sociétés (${allCo.length})`},{k:'contacts',label:`Contacts (${allCu.length})`}];
 
   return <div>
-    <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,position:'sticky',top:60,zIndex:5}}>
+    <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,position:'sticky',top:0,zIndex:5}}>
       <div style={{display:'flex'}}>
         {tabs.map(t=><button key={t.k} onClick={()=>{setSub(t.k);setSearch('');}} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
       </div>
@@ -2558,7 +2558,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
 
   return <div>
     <BackHeader title={fullName||'Contact'} subtitle={c.position||c.company?.name} onBack={onBack}/>
-    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:112,zIndex:7}}>
+    <div style={{borderTop:`1px solid ${T.border}`,borderBottom:`1px solid ${T.border}`,background:T.surface,display:'flex',position:'sticky',top:52,zIndex:7}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setTab(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'10px 4px',fontSize:11,fontWeight:tab===t.k?600:400,color:tab===t.k?T.brand:T.textMuted,borderBottom:tab===t.k?`2px solid ${T.brand}`:'2px solid transparent'}}>{t.label}</button>)}
     </div>
     <div style={{padding:'12px 16px 32px'}}>
