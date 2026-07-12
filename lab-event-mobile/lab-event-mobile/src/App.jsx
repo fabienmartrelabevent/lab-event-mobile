@@ -317,7 +317,7 @@ function Dashboard({session, onEventClick, onNavigate}) {
     {label:'À venir', value:upcoming.length, accent:T.brand, icon:Calendar, hint:'events', onClick:()=>onNavigate&&onNavigate('events')},
     {label:'Devis en cours', value:pending.length, accent:T.warning, icon:FileText, hint:'finances', onClick:()=>onNavigate&&onNavigate('finances-devis')},
     {label:'CA HT signé 12 mois', value:money(ca12mHT), accent:T.success, icon:Euro, hint:'Par date événement', onClick:()=>onNavigate&&onNavigate('rentabilite')},
-    {label:'CA HT signé ce mois', value:money(caThisMonthHT), accent:T.info, icon:Euro, hint:'Par date devis', onClick:()=>onNavigate&&onNavigate('finances-devis')},
+    {label:'CA HT signé ce mois', value:money(caThisMonthHT), accent:T.info, icon:Euro, hint:'Par date devis', onClick:()=>onNavigate&&onNavigate('finances-signes-mois')},
   ];
 
   return <div style={{padding:16}}>
@@ -783,15 +783,17 @@ function applyDateFilter(items, dateField, period) {
 }
 
 // ─── Finances ────────────────────────────────────────────────────
-function Finances({session}) {
-  const [sub,setSub]=useState('quotes');
+function Finances({session, initialFilter={}}) {
+  const [sub,setSub]=useState(initialFilter.sub||'quotes');
+  const [quotesFilter]=useState(initialFilter.quotesFilter||{});
+  const [inDetail,setInDetail]=useState(false);
   const tabs=[{k:'quotes',label:'Devis'},{k:'bills',label:'Factures'},{k:'payments',label:'Paiements'}];
   return <div>
-    <div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
+    {!inDetail&&<div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:60,zIndex:5}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setSub(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent',transition:'all 0.18s'}}>{t.label}</button>)}
-    </div>
-    {sub==='quotes'&&<Quotes session={session}/>}
-    {sub==='bills'&&<Bills session={session}/>}
+    </div>}
+    {sub==='quotes'&&<Quotes session={session} onDetailChange={setInDetail} initialFilter={quotesFilter}/>}
+    {sub==='bills'&&<Bills session={session} onDetailChange={setInDetail}/>}
     {sub==='payments'&&<Payments session={session}/>}
   </div>;
 }
@@ -961,6 +963,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
   const [selected,setSelected]=useState(null);
   const [datePeriod,setDatePeriod]=useState(initialFilter.datePeriod||'');
   const [pendingOnly,setPendingOnly]=useState(initialFilter.pendingOnly||false);
+  const [signedThisMonth,setSignedThisMonth]=useState(initialFilter.signedThisMonth||false);
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
@@ -971,15 +974,18 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
   const sorted=[...(items||[])].sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0));
   const byDate=applyDateFilter(sorted,'date_of_quote',datePeriod);
   const byPending=pendingOnly?byDate.filter(q=>!/sign|annul|rejet/i.test(q.status||'')):byDate;
-  const filtered=q?byPending.filter(d=>
+  const thisMonthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+  const bySignedMonth=signedThisMonth?byPending.filter(q=>/^sign[ée]/i.test(q.status||'')&&q.date_of_quote&&new Date(q.date_of_quote)>=thisMonthStart):byPending;
+  const filtered=q?bySignedMonth.filter(d=>
     (d.title||'').toLowerCase().includes(q)||
     (d.event||'').toLowerCase().includes(q)||
     (d.nb||'').toLowerCase().includes(q)||
     (d.customer||'').toLowerCase().includes(q)||
     (d.status||'').toLowerCase().includes(q)
-  ):byPending;
+  ):bySignedMonth;
   return <div style={{padding:16}}>
     {pendingOnly&&<div style={{background:`${T.warning}12`,border:`1px solid ${T.warning}33`,borderRadius:8,padding:'6px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}><span style={{color:T.warning,fontWeight:500}}>📋 Devis en cours uniquement</span><button onClick={()=>setPendingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12}}>✕ Tout voir</button></div>}
+    {signedThisMonth&&<div style={{background:`${T.success}12`,border:`1px solid ${T.success}33`,borderRadius:8,padding:'6px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}><span style={{color:T.success,fontWeight:500}}>✅ Devis signés ce mois</span><button onClick={()=>setSignedThisMonth(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12}}>✕ Tout voir</button></div>}
     <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
     <DateFilter value={datePeriod} onChange={setDatePeriod}/>
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
@@ -1972,6 +1978,7 @@ export default function App() {
         const k=Date.now();
         if(dest==='events'){setEventsInitFilter({upcomingOnly:true,_k:k});setTab('events');}
         else if(dest==='finances-devis'){setFinancesInitFilter({sub:'quotes',quotesFilter:{pendingOnly:true},_k:k});setTab('finances');}
+        else if(dest==='finances-signes-mois'){setFinancesInitFilter({sub:'quotes',quotesFilter:{signedThisMonth:true},_k:k});setTab('finances');}
         else if(dest==='rentabilite'){setTab('rentabilite');}
       }}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events key={eventsInitFilter._k||0} session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
