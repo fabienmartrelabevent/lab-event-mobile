@@ -2820,6 +2820,19 @@ function Support({onBack}) {
       ]
     },
     {
+      id:'tri', title:'Dans quel ordre s\'affichent les données ?', icon:'🔢',
+      items:[
+        {q:'Les événements — comment sont-ils classés ?', a:'Les événements à venir apparaissent EN PREMIER, du plus proche au plus lointain.\n\nEnsuite viennent les événements passés, du plus récent au plus ancien.\n\nExemple : si tu as un event demain, un dans 3 semaines, et deux de l\'année dernière → tu verras :\n1. Demain\n2. Dans 3 semaines\n3. Il y a 1 mois\n4. Il y a 6 mois'},
+        {q:'Les devis — comment sont-ils classés ?', a:'Par date d\'émission, du plus récent en premier. Le dernier devis que tu as créé apparaît en haut de la liste. Logique : c\'est le plus "chaud", celui sur lequel tu travailles probablement en ce moment.'},
+        {q:'Les factures — comment sont-elles classées ?', a:'Par date de facture, de la plus récente en premier. Même logique que les devis.'},
+        {q:'Les paiements — comment sont-ils classés ?', a:'Par date de paiement, du plus récent en premier. Tu vois en premier les derniers encaissements.'},
+        {q:'Les sociétés — comment sont-elles classées ?', a:'Par ordre alphabétique (A → Z) sur le nom de la société. Comme un annuaire. Tu peux utiliser la recherche pour trouver directement ce que tu cherches.'},
+        {q:'Les contacts — comment sont-ils classés ?', a:'Par ordre alphabétique (A → Z) sur le prénom + nom. Comme un répertoire téléphonique.'},
+        {q:'Les activités — comment sont-elles classées ?', a:'Par urgence d\'abord ! Les activités en retard (échéance dépassée) remontent tout en haut. Ensuite les autres, par ordre d\'échéance croissante (celle qui arrive le plus vite en premier).\n\nLe but : tu vois immédiatement ce qui est urgent sans chercher.'},
+        {q:'La rentabilité et les articles — comment sont-ils classés ?', a:'Par chiffre d\'affaires décroissant. La catégorie ou l\'article qui génère le plus de CA apparaît en premier. Ça te permet de voir immédiatement tes meilleurs produits et tes meilleures sections.'},
+      ]
+    },
+    {
       id:'refresh', title:'Données & Mises à jour', icon:'🔄',
       items:[
         {q:'Les données sont-elles en temps réel ?', a:'Presque ! L\'app garde une copie locale de tes données pour être rapide. Elles se mettent à jour automatiquement toutes les 30 minutes en arrière-plan. Après 2 heures sans activité, un rechargement complet se fait automatiquement.'},
