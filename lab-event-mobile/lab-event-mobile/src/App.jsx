@@ -2722,68 +2722,96 @@ function Support({onBack}) {
   const [open,setOpen]=useState(null);
   const sections=[
     {
-      id:'apercu', title:'Aperçu', icon:'📊',
+      id:'glossaire', title:'Les mots clés à connaître', icon:'📖',
       items:[
-        {q:'À venir (cliquable)', a:'Nombre d\'événements dont la date de début est supérieure à aujourd\'hui. Cliquer navigue vers la liste des Événements. Source : analytics/events sur les 2 dernières années.'},
-        {q:'Devis en cours (cliquable)', a:'Devis dont le statut ne contient pas "Signé", "Annulé" ou "Rejeté". Cliquer navigue vers Finances → Devis. Source : analytics/quotes sur 2 ans.'},
-        {q:'CA HT signé 12 mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés (statut ^Signé) dont la date d\'événement est dans les 12 derniers mois. Cliquer navigue vers Rentabilité. ⚠️ L\'API ne fournit pas de date de signature — on filtre par date d\'événement.'},
-        {q:'CA HT signé ce mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés dont la date d\'émission (date_of_quote) est dans le mois en cours. Cliquer navigue vers Finances → Devis. ⚠️ L\'API n\'expose pas de date de signature — on utilise la date d\'émission du devis comme proxy.'},
-        {q:'Prochains événements', a:'Affiche les 5 prochains événements futurs triés par date de début. Si tu en as plus de 5, un bouton "Voir les X →" permet d\'accéder à la liste complète filtrée. Le chiffre dans la card "À venir" indique le total réel.'},
-        {q:'En cours / Gagnés / Perdus', a:'"Gagnés" et "Perdus" = champ win_lost de l\'événement défini manuellement. "En cours" = events sans win_lost renseigné ou avec win_lost = "En cours".'},
+        {q:'C\'est quoi un Devis ?', a:'Un devis, c\'est une proposition de prix que tu envoies à ton client avant la vente. Il dit : "voilà ce qu\'on propose, voilà combien ça coûte". Le client peut accepter (signer) ou refuser. Tant qu\'il n\'est pas signé, c\'est juste une proposition.'},
+        {q:'C\'est quoi une Facture ?', a:'La facture vient après le devis signé. C\'est le document officiel qui dit "tu nous dois cet argent". C\'est la facture que le client doit payer. On peut en envoyer plusieurs pour un même événement (acompte, solde...).'},
+        {q:'C\'est quoi HT vs TTC ?', a:'HT = Hors Taxe = le prix SANS TVA. C\'est ton chiffre d\'affaires réel avant impôts.\n\nTTC = Toutes Taxes Comprises = le prix AVEC TVA = ce que le client paye vraiment.\n\nExemple : 1 000 € HT avec 20% de TVA = 1 200 € TTC.\n\n👉 Dans l\'app, les montants des devis et factures sont en HT. Les paiements encaissés sont en TTC.'},
+        {q:'C\'est quoi le CA ?', a:'CA = Chiffre d\'Affaires. C\'est le total de ce que tu vends (ou as vendu). Ce n\'est pas ton bénéfice — c\'est le total des ventes avant de retirer tes coûts.'},
+        {q:'C\'est quoi la Marge ?', a:'La marge, c\'est ce qu\'il te reste une fois que tu as payé tes prestataires et fournisseurs. Si tu vends un événement 10 000 € et que tes coûts sont 6 000 €, ta marge est 4 000 €.\n\nLe taux de marge, c\'est ce reste exprimé en % du CA. 40% de marge = tu gardes 40% de ce que tu factures.'},
+        {q:'C\'est quoi Gagné / Perdu / En cours ?', a:'"Gagné" = l\'événement a eu lieu et a été vendu avec succès.\n"Perdu" = le client est parti chez un concurrent ou a annulé.\n"En cours" = on travaille encore dessus, c\'est dans le pipeline commercial.\n\nCes statuts sont saisis manuellement dans Lab-event.'},
+        {q:'C\'est quoi le Pipeline commercial ?', a:'Le pipeline, c\'est la liste de tes opportunités en cours. Imagine un entonnoir : en haut il y a plein de demandes, et à la fin il n\'en reste qu\'un certain nombre de signées. L\'app te montre combien tu en as à chaque étape.'},
       ]
     },
     {
-      id:'events', title:'Événements', icon:'📅',
+      id:'apercu', title:'Écran Aperçu — le tableau de bord', icon:'📊',
       items:[
-        {q:'Source des données', a:'Endpoint analytics/events, limité aux 2 dernières années. Chaque event contient : nom, client, société, statut, CA signé, CA total, marge.'},
-        {q:'Filtres date', a:'Fenêtres glissantes : 30j, 90j, 6 mois, 1 an, 2 ans. S\'applique sur la date de début de l\'événement.'},
-        {q:'Filtres pipeline', a:'Tous / En cours / Gagné / Perdu — basé sur le champ win_lost.'},
-        {q:'Onglets dans le détail', a:'Devis, Factures, Paiements filtrés par incremental_code (code numérique de l\'event). Activités filtrées par event_name. Planning depuis vue-planning filtré par incremental_code.'},
+        {q:'À venir — c\'est quoi ?', a:'C\'est le nombre de tes événements qui ont une date DANS LE FUTUR (à partir d\'aujourd\'hui). Si tu cliques dessus, tu vois la liste de ces événements. Exemple : tu as 13 événements planifiés dans les semaines/mois qui viennent.'},
+        {q:'Devis en cours — c\'est quoi ?', a:'C\'est le nombre de devis que tu as envoyés et qui sont ni signés, ni annulés, ni refusés. En gros : les propositions qui "attendent" une réponse de tes clients. Si tu cliques, tu vois ces devis.'},
+        {q:'CA HT signé 12 mois — comment c\'est calculé ?', a:'C\'est la somme (en euros HT) de tous les devis que tes clients ont signés et dont l\'événement tombe dans les 12 derniers mois. ⚠️ Attention : on utilise la date de l\'événement, pas la date à laquelle le client a signé — parce que Lab-event ne donne pas cette info directement.'},
+        {q:'CA HT signé ce mois — comment c\'est calculé ?', a:'C\'est la somme (en euros HT) des devis signés ce mois-ci. On utilise la date du devis comme référence (pas la date de signature exacte — voir point précédent). Si tu cliques, tu vois ces devis.'},
+        {q:'Prochains événements — pourquoi je n\'en vois que 5 ?', a:'Pour garder l\'écran clair et rapide, on affiche les 5 prochains événements. Si tu en as plus (ex: 13), tu verras un bouton "Voir les 13 →" qui t\'emmène vers la liste complète. Le chiffre sur la card "À venir" indique TOUJOURS le vrai total.'},
+        {q:'En cours / Gagnés / Perdus — c\'est quoi ?', a:'Ce sont les compteurs de ton pipeline. "Gagnés" et "Perdus" sont définis manuellement dans Lab-event sur chaque fiche événement. "En cours" = tous les événements qui n\'ont pas encore de résultat final.'},
       ]
     },
     {
-      id:'finances', title:'Finances', icon:'💶',
+      id:'events', title:'Écran Événements', icon:'📅',
       items:[
-        {q:'Devis', a:'Source : analytics/finance-documents/quotes. Contient le titre, numéro, statut, montants HT/TTC/Marge/Commission, lignes de produits via vue-analytics-light.'},
-        {q:'Factures', a:'Source : analytics/finance-documents/bills. Même structure que devis.'},
-        {q:'Paiements', a:'Source : analytics/bill-prepayments. Montants encaissés par facture avec reste à percevoir.'},
-        {q:'Lignes de produits', a:'Chargées depuis vue-analytics-light filtré par document_id (= quote_id ou bill_id). Fenêtre de 60 jours autour de la date du document pour éviter de charger trop de données.'},
-        {q:'Filtres date', a:'30j, 90j, 6 mois, 1 an, 2 ans — fenêtres glissantes à partir d\'aujourd\'hui.'},
+        {q:'Pourquoi je vois seulement 2 ans d\'événements ?', a:'L\'app charge les données des 2 dernières années. C\'est un choix technique pour que l\'app reste rapide. Si tu as besoin de voir des événements plus anciens, utilise Lab-event directement.'},
+        {q:'C\'est quoi les filtres en haut ?', a:'Les filtres de date (30j, 90j, 6 mois, 1 an, 2 ans) montrent les événements dont la DATE DE DÉBUT tombe dans cette fenêtre glissante.\n\nLes filtres pipeline (Tous, En cours, Gagné, Perdu) filtrent selon le résultat de l\'événement.'},
+        {q:'Qu\'est-ce que je vois dans le détail d\'un événement ?', a:'- Les informations générales (dates, client, commercial...)\n- Les Devis liés à cet événement\n- Les Factures liées\n- Les Paiements reçus\n- Les Activités (tâches, rappels...)\n- Le Planning des salles réservées\n\nTout ça est automatiquement filtré pour ne montrer que ce qui concerne CET événement.'},
+        {q:'Pourquoi le CA HT de l\'événement est différent du total du devis (TTC) ?', a:'Normal ! Le CA de l\'événement est en HT (sans TVA). Le montant du devis en TTC inclut la TVA. Exemple : CA HT 31 900 € × 1,20 (TVA 20%) = 38 280 € TTC. Les deux chiffres sont corrects, ils mesurent la même chose différemment.'},
       ]
     },
     {
-      id:'rentabilite', title:'Rentabilité', icon:'📈',
+      id:'finances', title:'Écran Finances', icon:'💶',
       items:[
-        {q:'Source', a:'analytics/finance-documents/rentability — une ligne par section de devis (Hébergement, Restauration...) avec CA vendu, marge et commission.'},
-        {q:'Filtre Signés uniquement', a:'Garde uniquement les lignes dont le statut commence par "Signé". Recommandé pour voir le CA réel.'},
-        {q:'Filtre Tous les documents', a:'Inclut devis brouillons, finalisés, proformas — utile pour voir le potentiel total.'},
-        {q:'Taux de marge', a:'= Marge / CA vendu × 100. Code couleur : vert ≥30%, orange ≥15%, rouge <15%.'},
+        {q:'Devis — qu\'est-ce que je vois ?', a:'La liste de tous tes devis sur les 2 dernières années. Les montants sont en HT (sans TVA). Tu peux filtrer par période (30j, 90j...) et chercher par nom, numéro ou client. En cliquant sur un devis, tu vois toutes ses lignes de produits.'},
+        {q:'Factures — qu\'est-ce que je vois ?', a:'La liste de toutes tes factures. Comme les devis, les montants sont en HT. La facture peut avoir différents statuts : Brouillon (pas encore envoyée), Finalisée (envoyée), Payée (tout est réglé).'},
+        {q:'Paiements — qu\'est-ce que je vois ?', a:'Ici tu vois les acomptes et règlements que tes clients ont versés. Ces montants sont en TTC (avec TVA), parce que c\'est ce que le client a réellement payé. Tu vois aussi le "reste à percevoir" = ce qu\'il reste à encaisser.'},
+        {q:'Pourquoi les montants HT et TTC sont différents ?', a:'La TVA ! En France, la TVA standard est à 20%. Donc :\n- 1 000 € HT + 20% TVA = 1 200 € TTC\nLe client paie 1 200 €, mais ton CA est de 1 000 € (tu reverses 200 € à l\'État).'},
+        {q:'C\'est quoi les lignes dans le détail d\'un devis ?', a:'Ce sont les articles et prestations qui composent le devis : hébergement, restauration, animation, etc. Chaque ligne a un nom, une section (catégorie) et un montant. Ces informations viennent directement de Lab-event.'},
+      ]
+    },
+    {
+      id:'rentabilite', title:'Écran Rentabilité', icon:'📈',
+      items:[
+        {q:'À quoi ça sert ?', a:'La rentabilité, ça répond à la question : "Sur quels types de prestations je gagne le plus d\'argent ?" Tu vois par exemple que tu as 51% de marge sur la Restauration mais 92% sur la Privatisation. Ça t\'aide à savoir où concentrer tes efforts.'},
+        {q:'"Signés uniquement" vs "Tous les documents" — quelle différence ?', a:'"Signés uniquement" = seulement les devis que tes clients ont acceptés. C\'est TON VRAI CA, ce que tu as vraiment vendu.\n\n"Tous les documents" inclut aussi les devis en attente, brouillons, proformas. C\'est le CA POTENTIEL si tout se concrétise. Commence par "Signés uniquement" pour voir la réalité.'},
+        {q:'Le taux de marge — comment le lire ?', a:'C\'est le % de ce que tu gardes. 40% de marge = sur 100 € que tu factures, 40 € restent dans ta poche (après avoir payé tes prestataires).\n\nCode couleur :\n🟢 ≥ 30% = bonne marge\n🟠 Entre 15% et 30% = à surveiller\n🔴 < 15% = marge faible, attention'},
+        {q:'Pourquoi certaines sections s\'appellent "N/A" ?', a:'"N/A" = les lignes de devis sans catégorie de prestation renseignée dans Lab-event. Pour avoir des données plus propres, il faut s\'assurer que chaque ligne de devis a bien une section (Hébergement, Restauration...) dans Lab-event.'},
       ]
     },
     {
       id:'analytics', title:'Analytics produits', icon:'🏷️',
       items:[
-        {q:'Source', a:'analytics/finance-documents/vue-analytics-light — une ligne par article dans chaque document (devis/facture). Agrégé par good_name.'},
-        {q:'CA', a:'Somme des sell_price de toutes les occurrences de cet article sur la période.'},
-        {q:'× vendus', a:'Nombre de fois où cet article apparaît dans des documents sur la période.'},
-        {q:'PU moyen', a:'Prix unitaire moyen calculé sur les occurrences avec un prix > 0.'},
+        {q:'À quoi ça sert ?', a:'C\'est pour savoir quels sont tes produits/services les plus vendus. Par exemple : "Location salon" apparaît 162 fois pour 5,9M€ de CA. Ça t\'aide à identifier tes best-sellers et à comprendre ce que tes clients achètent le plus.'},
+        {q:'CA — c\'est le chiffre de toute la période ?', a:'Oui ! Le CA d\'un article, c\'est la somme de toutes ses occurrences sur la période choisie. Si "Cocktails" apparaît dans 50 devis à 200€ chaque fois, le CA affiché est 10 000 €.'},
+        {q:'× vendus — c\'est quoi exactement ?', a:'C\'est le nombre de fois où cet article apparaît dans un devis ou une facture. Ce n\'est pas le nombre d\'unités vendues, c\'est le nombre de documents qui contiennent cet article.'},
+        {q:'PU moyen — c\'est quoi ?', a:'PU = Prix Unitaire. C\'est le prix moyen de cet article calculé sur toutes ses ventes. Utile pour vérifier si tes prix sont cohérents et si tu vends toujours au même tarif.'},
       ]
     },
     {
-      id:'contacts', title:'Contacts & Sociétés', icon:'👥',
+      id:'contacts', title:'Clients & Contacts', icon:'👥',
       items:[
-        {q:'Source', a:'GET /v3/customer-company (sociétés) et GET /v3/customers (contacts), pagination complète via fetchAllPages.'},
-        {q:'Fiche société', a:'Données enrichies via /v3/customer-company/{id} : adresse, SIRET, TVA, site web. Onglets : Contacts liés, Événements, Devis/Factures, Activités — tous filtrés par nom de société.'},
-        {q:'Fiche contact', a:'Onglets : Infos, Événements, Devis, Activités — filtrés par nom du contact et/ou société.'},
+        {q:'Quelle différence entre Société et Contact ?', a:'Une Société, c\'est l\'entreprise (ex: "ADEZ", "Decathlon"). Un Contact, c\'est une personne physique dans cette entreprise (ex: "Marine Sahnoune, Directrice commerciale"). Une société peut avoir plusieurs contacts.'},
+        {q:'Qu\'est-ce que je vois dans la fiche d\'une société ?', a:'- Ses contacts (personnes)\n- Ses événements passés et futurs\n- Ses devis et factures\n- Ses activités (tâches en cours)\n\nTout ça te permet de voir en un coup d\'œil tout l\'historique avec ce client.'},
+        {q:'Je peux appeler ou écrire directement depuis l\'app ?', a:'Oui ! Si l\'email ou le téléphone d\'un contact est renseigné, il apparaît en bleu cliquable. Appuie dessus pour appeler ou envoyer un email directement.'},
       ]
     },
     {
-      id:'cache', title:'Données & Rafraîchissement', icon:'🔄',
+      id:'activites', title:'Activités', icon:'✅',
       items:[
-        {q:'Mise en cache', a:'Toutes les données sont mises en cache local pour un affichage instantané. TTL : 30 min (rafraîchissement silencieux) → 2h (rechargement forcé).'},
-        {q:'Données obsolètes', a:'Si les données semblent anciennes, faites une déconnexion/reconnexion pour forcer un rechargement complet.'},
-        {q:'Période couverte', a:'Toutes les sections couvrent les 2 dernières années par défaut, sauf les filtres de période qui réduisent la fenêtre.'},
-        {q:'Nouvelles données', a:'Les événements/devis créés très récemment apparaîtront après le prochain rafraîchissement automatique (max 2h).'},
+        {q:'C\'est quoi une Activité ?', a:'Une activité, c\'est une tâche ou un suivi commercial. Par exemple : "Appeler le client pour valider le menu", "Envoyer la facture d\'acompte", "Relancer pour signature du devis". Chaque activité a une date limite (échéance).'},
+        {q:'C\'est quoi "En retard" ?', a:'Une activité "En retard" = son échéance est passée et elle n\'a pas été faite. C\'est urgent ! Par exemple : "Faire la facture - échéance 01 juil. 2026" et on est le 5 juillet → c\'est en retard.'},
+        {q:'C\'est quoi "Bientôt" ?', a:'"Bientôt" = l\'échéance arrive dans les prochains jours. Ce ne sont PAS des activités en retard, juste des activités à faire rapidement pour éviter qu\'elles deviennent en retard.'},
+        {q:'Je peux naviguer vers l\'événement depuis une activité ?', a:'Oui ! Sur chaque activité, tu as des boutons "Voir événement" et "Voir client" qui t\'emmènent directement vers la fiche correspondante dans l\'app.'},
+      ]
+    },
+    {
+      id:'planning', title:'Planning & Salles', icon:'🏨',
+      items:[
+        {q:'Planning salles — c\'est quoi ?', a:'C\'est la liste de toutes les réservations de salles sur les 2 dernières années. Tu vois quelle salle est réservée pour quel événement, à quelles heures.'},
+        {q:'Planning dans une fiche événement — c\'est différent ?', a:'Oui ! Dans le détail d\'un événement, l\'onglet Planning montre UNIQUEMENT les salles réservées pour CET événement spécifique. C\'est beaucoup plus ciblé.'},
+      ]
+    },
+    {
+      id:'refresh', title:'Données & Mises à jour', icon:'🔄',
+      items:[
+        {q:'Les données sont-elles en temps réel ?', a:'Presque ! L\'app garde une copie locale de tes données pour être rapide. Elles se mettent à jour automatiquement toutes les 30 minutes en arrière-plan. Après 2 heures sans activité, un rechargement complet se fait automatiquement.'},
+        {q:'J\'ai créé un événement dans Lab-event, pourquoi il n\'apparaît pas ?', a:'Il apparaîtra au prochain rafraîchissement automatique (maximum 2 heures). Si tu veux voir tes données immédiatement, déconnecte-toi et reconnecte-toi — ça force un rechargement complet.'},
+        {q:'L\'app couvre quelle période ?', a:'Par défaut, toutes les sections montrent les 2 dernières années. Tu peux réduire la fenêtre avec les filtres (30j, 90j, 6 mois, 1 an). Mais tu ne peux pas voir au-delà de 2 ans dans l\'app mobile — utilise Lab-event pour ça.'},
+        {q:'Je ne trouve pas ce que je cherche dans l\'app ?', a:'L\'app mobile est conçue pour les consultations rapides et les actions simples (créer un événement, voir un devis, appeler un client). Pour tout ce qui est édition complexe, configuration, ou données historiques, utilise directement Lab-event sur ton navigateur.'},
       ]
     },
   ];
@@ -2792,17 +2820,17 @@ function Support({onBack}) {
     <BackHeader title="Support & Aide" onBack={onBack}/>
     <div style={{padding:'16px 16px 32px'}}>
       <div style={{background:T.brandSubtle,border:`1px solid ${T.brandTint}`,borderRadius:10,padding:'12px 14px',marginBottom:16,fontSize:13,color:T.brandStrong,lineHeight:1.6}}>
-        Cette section explique comment chaque écran calcule ses données et d'où elles proviennent. Elle sera enrichie au fil du temps.
+        💡 Tu ne comprends pas un chiffre ou un écran ? La réponse est ici. On a écrit ces explications pour que tout le monde comprenne, même sans formation technique.
       </div>
-      {sections.map(s=><div key={s.id} style={{marginBottom:12}}>
-        <button onClick={()=>setOpen(open===s.id?null:s.id)} style={{width:'100%',background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',textAlign:'left'}}>
+      {sections.map(s=><div key={s.id} style={{marginBottom:10}}>
+        <button onClick={()=>setOpen(open===s.id?null:s.id)} style={{width:'100%',background:T.surface,border:`1px solid ${open===s.id?T.brand:T.border}`,borderRadius:open===s.id?'10px 10px 0 0':10,padding:'14px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer',textAlign:'left'}}>
           <span style={{fontSize:14,fontWeight:600,color:T.ink}}>{s.icon} {s.title}</span>
-          <span style={{fontSize:16,color:T.textMuted,transform:open===s.id?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▾</span>
+          <span style={{fontSize:16,color:open===s.id?T.brand:T.textMuted,transform:open===s.id?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▾</span>
         </button>
-        {open===s.id&&<div style={{border:`1px solid ${T.border}`,borderTop:'none',borderRadius:'0 0 10px 10px',overflow:'hidden'}}>
-          {s.items.map((item,i)=><div key={i} style={{padding:'12px 16px',borderBottom:i<s.items.length-1?`1px solid ${T.border}`:'none',background:i%2===0?T.surface:`${T.surfaceMuted}`}}>
-            <div style={{fontSize:13,fontWeight:600,color:T.ink,marginBottom:4}}>❓ {item.q}</div>
-            <div style={{fontSize:12.5,color:T.textMuted,lineHeight:1.6}}>{item.a}</div>
+        {open===s.id&&<div style={{border:`1px solid ${T.brand}`,borderTop:'none',borderRadius:'0 0 10px 10px',overflow:'hidden'}}>
+          {s.items.map((item,i)=><div key={i} style={{padding:'14px 16px',borderBottom:i<s.items.length-1?`1px solid ${T.border}`:'none',background:i%2===0?T.surface:'#f9fafb'}}>
+            <div style={{fontSize:13,fontWeight:700,color:T.ink,marginBottom:6}}>❓ {item.q}</div>
+            <div style={{fontSize:13,color:T.text,lineHeight:1.7,whiteSpace:'pre-line'}}>{item.a}</div>
           </div>)}
         </div>}
       </div>)}
