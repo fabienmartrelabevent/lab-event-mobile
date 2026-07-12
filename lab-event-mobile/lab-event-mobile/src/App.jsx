@@ -535,7 +535,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
                 <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{q.nb} · {date(q.date_of_quote)}</div>
               </div>
               <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(q.ttc)}</div>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(q.total_ht||q.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
                 {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
               </div>
             </div>
@@ -554,7 +554,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
                 {b.contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{b.contact_name}</div>}
               </div>
               <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
+                <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.total_ht||b.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
                 {b.status&&<Badge label={b.status} color={/pay[ée]/i.test(b.status)?T.success:/annul/i.test(b.status)?T.danger:T.warning}/>}
               </div>
             </div>
@@ -999,7 +999,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
               {item.customer&&<div style={{fontSize:12,color:T.textMuted}}>{item.customer}</div>}
             </div>
             <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(item.ttc)}</div>
+              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(item.total_ht)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
               {item.status&&<Badge label={item.status} color={/sign/i.test(item.status)?T.success:/rejet|annul/i.test(item.status)?T.danger:T.warning}/>}
             </div>
           </div>
@@ -1140,7 +1140,7 @@ function Bills({session, onDetailChange=()=>{}}) {
               {b.contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{b.contact_name}</div>}
             </div>
             <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
-              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
+              <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.total_ht||b.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
               {b.status&&<Badge label={b.status} color={/pay[ée]/i.test(b.status)?T.success:/annul/i.test(b.status)?T.danger:T.warning}/>}
             </div>
           </div>
@@ -1416,7 +1416,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
               <div style={{fontSize:11.5,color:T.textMuted}}>{q.nb} · {date(q.date_of_quote)}</div>
             </div>
             <div style={{textAlign:'right'}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(q.ttc)}</div>
+              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(q.total_ht||q.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
               {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
             </div>
           </div>
@@ -1428,7 +1428,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
               <div style={{fontSize:11.5,color:T.textMuted}}>{b.nb} · {date(b.date)}</div>
             </div>
             <div style={{textAlign:'right'}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(b.ttc)}</div>
+              <div style={{fontSize:13,fontWeight:700,color:T.ink}}>{money(b.total_ht||b.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
               {b.status&&<Badge label={b.status} color={/pay/i.test(b.status)?T.success:T.warning}/>}
             </div>
           </div>
@@ -2609,7 +2609,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
                 <div style={{fontSize:11.5,color:T.textMuted}}>{q.nb} · {date(q.date_of_quote)}</div>
               </div>
               <div style={{textAlign:'right'}}>
-                <div style={{fontSize:13,fontWeight:700}}>{money(q.ttc)}</div>
+                <div style={{fontSize:13,fontWeight:700}}>{money(q.total_ht||q.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
                 {q.status&&<Badge label={q.status} color={/sign/i.test(q.status)?T.success:/rejet|annul/i.test(q.status)?T.danger:T.warning}/>}
               </div>
             </div>
