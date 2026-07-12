@@ -266,7 +266,7 @@ function Login({onLogin}) {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────
-function Dashboard({session,onEventClick}) {
+function Dashboard({session, onEventClick, onNavigate}) {
   const [events,setEvents]=useState(null);
   const [quotes,setQuotes]=useState(null);
   const [err,setErr]=useState('');
@@ -292,32 +292,44 @@ function Dashboard({session,onEventClick}) {
 
   const now=new Date();
   const thisMonth=new Date(now.getFullYear(),now.getMonth(),1);
+  const last12m=new Date(now); last12m.setFullYear(last12m.getFullYear()-1);
 
-  // Events filtrés
+  // Events
   const upcoming=(events||[]).filter(e=>e.events_date_from&&new Date(e.events_date_from)>=now).sort((a,b)=>new Date(a.events_date_from)-new Date(b.events_date_from));
   const won=(events||[]).filter(e=>e.win_lost==='Gagné').length;
   const lost=(events||[]).filter(e=>e.win_lost==='Perdu').length;
-  // En cours = events avec win_lost = 'En cours' OU sans valeur win_lost
   const inProgress=(events||[]).filter(e=>!e.win_lost||e.win_lost==='En cours'||e.win_lost==='En Cours').length;
 
-  // Quotes filtrés
+  // Quotes
   const pending=(quotes||[]).filter(q=>!/sign|annul|rejet/i.test(q.status||''));
   const allSigned=(quotes||[]).filter(q=>/^sign[ée]/i.test(q.status||''));
-  const totalSigned=allSigned.reduce((s,q)=>s+(Number(q.ttc)||0),0);
-  const signedThisMonth=allSigned.filter(q=>q.date_of_quote&&new Date(q.date_of_quote)>=thisMonth);
-  const caThisMonth=signedThisMonth.reduce((s,q)=>s+(Number(q.ttc)||0),0);
 
-  const periodLabel = `Sur 2 ans (depuis ${new Date(dateJ2Ans()).toLocaleDateString('fr-FR',{month:'short',year:'numeric'})})`;
+  // CA HT des 12 derniers mois par date d'événement
+  const signed12m=allSigned.filter(q=>q.date_of_event&&new Date(q.date_of_event)>=last12m);
+  const ca12mHT=signed12m.reduce((s,q)=>s+(Number(q.total_ht)||0),0);
+
+  // CA HT ce mois par date d'émission du devis (pas de date_signed dans l'API)
+  const signedThisMonth=allSigned.filter(q=>q.date_of_quote&&new Date(q.date_of_quote)>=thisMonth);
+  const caThisMonthHT=signedThisMonth.reduce((s,q)=>s+(Number(q.total_ht)||0),0);
+
+  // KPI cards
+  const kpis=[
+    {label:'À venir', value:upcoming.length, accent:T.brand, icon:Calendar, hint:'events', onClick:()=>onNavigate&&onNavigate('events')},
+    {label:'Devis en cours', value:pending.length, accent:T.warning, icon:FileText, hint:'finances', onClick:()=>onNavigate&&onNavigate('finances-devis')},
+    {label:'CA HT signé 12 mois', value:money(ca12mHT), accent:T.success, icon:Euro, hint:'Par date événement', onClick:()=>onNavigate&&onNavigate('rentabilite')},
+    {label:'CA HT signé ce mois', value:money(caThisMonthHT), accent:T.info, icon:Euro, hint:'Par date devis', onClick:()=>onNavigate&&onNavigate('finances-devis')},
+  ];
 
   return <div style={{padding:16}}>
-    {/* KPIs */}
-    <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:4}}>
-      <StatCard icon={Calendar} label="À venir" value={upcoming.length} accent={T.brand}/>
-      <StatCard icon={FileText} label="Devis en cours" value={pending.length} accent={T.warning}/>
-      <StatCard icon={Euro} label="CA signé TTC" value={money(totalSigned)} accent={T.success}/>
-      <StatCard icon={Euro} label="CA signé ce mois" value={money(caThisMonth)} accent={T.info}/>
+    {/* KPIs cliquables */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+      {kpis.map((k,i)=><button key={i} onClick={k.onClick} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'12px 14px',textAlign:'left',cursor:k.onClick?'pointer':'default',transition:'all 0.15s',display:'flex',flexDirection:'column',gap:4}} onMouseEnter={e=>{if(k.onClick)e.currentTarget.style.borderColor=T.brand;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;}}>
+        <k.icon size={16} color={k.accent}/>
+        <div style={{fontSize:17,fontWeight:700,color:k.accent,lineHeight:1.2}}>{k.value}</div>
+        <div style={{fontSize:11.5,color:T.ink,fontWeight:500}}>{k.label}</div>
+        {k.onClick&&<div style={{fontSize:10,color:T.textSubtle,display:'flex',alignItems:'center',gap:3,marginTop:2}}>Voir →</div>}
+      </button>)}
     </div>
-    <div style={{fontSize:10.5,color:T.textSubtle,marginBottom:14,textAlign:'right'}}>{periodLabel}</div>
 
     {/* Pipeline */}
     <div style={{display:'flex',gap:8,marginBottom:16}}>
@@ -1943,7 +1955,11 @@ export default function App() {
     </div>
     {/* Content */}
     <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
-      {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
+      {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onNavigate={dest=>{
+        if(dest==='events'){setTab('events');}
+        else if(dest==='finances-devis'){setTab('finances');}
+        else if(dest==='rentabilite'){setTab('rentabilite');}
+      }}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>)}
       {tab==='finances'&&<Finances session={session}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
@@ -2687,11 +2703,11 @@ function Support({onBack}) {
     {
       id:'apercu', title:'Aperçu', icon:'📊',
       items:[
-        {q:'À venir', a:'Nombre d\'événements dont la date de début est supérieure à aujourd\'hui. Source : analytics/events sur les 2 dernières années.'},
-        {q:'Devis en cours', a:'Devis dont le statut n\'est pas "Signé", "Annulé" ou "Rejeté". Correspond aux opportunités actives sur 2 ans.'},
-        {q:'CA signé TTC', a:'Somme du TTC de tous les devis avec statut commençant par "Signé" (Signé par le client, Signé électroniquement...) sur les 2 dernières années.'},
-        {q:'CA signé ce mois', a:'CA TTC des devis signés dont la date d\'émission est dans le mois en cours. ⚠️ Basé sur la date du devis, pas la date de signature.'},
-        {q:'En cours / Gagnés / Perdus', a:'"Gagnés" et "Perdus" = champ win_lost de l\'événement. "En cours" = events sans valeur win_lost ou avec win_lost = "En cours".'},
+        {q:'À venir (cliquable)', a:'Nombre d\'événements dont la date de début est supérieure à aujourd\'hui. Cliquer navigue vers la liste des Événements. Source : analytics/events sur les 2 dernières années.'},
+        {q:'Devis en cours (cliquable)', a:'Devis dont le statut ne contient pas "Signé", "Annulé" ou "Rejeté". Cliquer navigue vers Finances → Devis. Source : analytics/quotes sur 2 ans.'},
+        {q:'CA HT signé 12 mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés (statut ^Signé) dont la date d\'événement est dans les 12 derniers mois. Cliquer navigue vers Rentabilité. ⚠️ L\'API ne fournit pas de date de signature — on filtre par date d\'événement.'},
+        {q:'CA HT signé ce mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés dont la date d\'émission (date_of_quote) est dans le mois en cours. Cliquer navigue vers Finances → Devis. ⚠️ L\'API n\'expose pas de date de signature — on utilise la date d\'émission du devis comme proxy.'},
+        {q:'En cours / Gagnés / Perdus', a:'"Gagnés" et "Perdus" = champ win_lost de l\'événement défini manuellement. "En cours" = events sans win_lost renseigné ou avec win_lost = "En cours".'},
       ]
     },
     {
