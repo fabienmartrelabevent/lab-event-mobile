@@ -680,9 +680,12 @@ function Events({session, onCompanyClick, initialFilter={}}) {
     return mQ&&mP;
   });
 
-  return <div style={{padding:16}}>
-    <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, client, lieu…"/>
-    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+  return <div style={{paddingTop:8}}>
+    <div style={{position:'sticky',top:60,zIndex:4,background:T.surface,padding:'8px 16px 0',paddingBottom:4,marginBottom:0}}>
+      <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, client, lieu…"/>
+      <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
     {pipelines.length>0&&<div style={{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
       <button onClick={()=>setPipeline('')} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${!pipeline?T.brand:T.border}`,background:!pipeline?T.brandTint:'none',color:!pipeline?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:!pipeline?600:400}}>Tous</button>
       {pipelines.map(p=><button key={p} onClick={()=>setPipeline(p===pipeline?'':p)} style={{padding:'4px 10px',borderRadius:999,border:`1px solid ${pipeline===p?T.brand:T.border}`,background:pipeline===p?T.brandTint:'none',color:pipeline===p?T.brand:T.textMuted,fontSize:11,cursor:'pointer',fontWeight:pipeline===p?600:400}}>{p}</button>)}
@@ -693,6 +696,7 @@ function Events({session, onCompanyClick, initialFilter={}}) {
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>setSelected(ev)}/>)}
       </div>}
+    </div>
   </div>;
 }
 
@@ -983,9 +987,12 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
     (d.customer||'').toLowerCase().includes(q)||
     (d.status||'').toLowerCase().includes(q)
   ):bySignedMonth;
-  return <div style={{padding:'16px 16px 16px'}}>
-    <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
-    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+  return <div style={{paddingTop:8}}>
+    <div style={{position:'sticky',top:104,zIndex:4,background:T.surface,paddingBottom:4,marginBottom:0,padding:'8px 16px 0'}}>
+      <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
+      <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
     {pendingOnly&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.warning,fontWeight:600}}>📋 Devis en cours uniquement</span><button onClick={()=>setPendingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
     {signedThisMonth&&<div style={{background:`${T.success}12`,border:`1.5px solid ${T.success}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.success,fontWeight:600}}>✅ Devis signés ce mois</span><button onClick={()=>setSignedThisMonth(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod||pendingOnly||signedThisMonth)?` sur ${sorted.length}`:''}</div>
@@ -1005,6 +1012,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
           </div>
         </Card>)}
       </div>}
+    </div>
   </div>;
 }
 
@@ -1126,9 +1134,12 @@ function Bills({session, onDetailChange=()=>{}}) {
     (b.contact_name||'').toLowerCase().includes(q)||
     (b.status||'').toLowerCase().includes(q)
   ):byDate;
-  return <div style={{padding:16}}>
-    <SearchBar value={search} onChange={setSearch} placeholder="Événement, client, numéro…"/>
-    <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+  return <div style={{paddingTop:8}}>
+    <div style={{position:'sticky',top:104,zIndex:4,background:T.surface,paddingBottom:4,marginBottom:0,padding:'8px 16px 0'}}>
+      <SearchBar value={search} onChange={setSearch} placeholder="Événement, client, numéro…"/>
+      <DateFilter value={datePeriod} onChange={setDatePeriod}/>
+    </div>
+    <div style={{padding:'0 16px 16px'}}>
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} facture{filtered.length>1?'s':''}{(q||datePeriod)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={Receipt} msg={q?"Aucun résultat.":"Aucune facture."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -1146,6 +1157,7 @@ function Bills({session, onDetailChange=()=>{}}) {
           </div>
         </Card>)}
       </div>}
+    </div>
   </div>;
 }
 
