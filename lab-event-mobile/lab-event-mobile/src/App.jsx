@@ -616,7 +616,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
 }
 
 // ─── Events list ─────────────────────────────────────────────────
-function Events({session}) {
+function Events({session, onCompanyClick}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -632,7 +632,8 @@ function Events({session}) {
   },[session]);
   useEffect(()=>{load();},[load]);
 
-  if(selected) return <EventDetail event={selected} session={session} onBack={()=>setSelected(null)} onCompanyClick={undefined}/>;  if(loading) return <Spinner/>;
+  if(selected) return <EventDetail event={selected} session={session} onBack={()=>setSelected(null)} onCompanyClick={onCompanyClick}/>;
+  if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
@@ -1916,7 +1917,7 @@ export default function App() {
     {/* Content */}
     <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
-      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events session={session}/>)}
+      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>)}
       {tab==='finances'&&<Finances session={session}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
       {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
@@ -2003,6 +2004,7 @@ function Prestataires({session}) {
   },[session]);
   useEffect(()=>{load();},[load]);
 
+  if(selected) return <PartnerDetail partner={selected} session={session} onBack={()=>setSelected(null)}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
