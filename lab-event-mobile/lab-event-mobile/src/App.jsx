@@ -1838,8 +1838,8 @@ export default function App() {
   const [showCreate,setShowCreate]=useState(false);
   const [eventDetail,setEventDetail]=useState(null);
   const [companyDetailOverride,setCompanyDetailOverride]=useState(null);
-  const [eventsInitFilter,setEventsInitFilter]=useState({});
-  const [financesInitFilter,setFinancesInitFilter]=useState({});
+  const [eventsInitFilter,setEventsInitFilter]=useState({_k:0});
+  const [financesInitFilter,setFinancesInitFilter]=useState({_k:0});
   const [drawerOpen,setDrawerOpen]=useState(false);
   const [showSupport,setShowSupport]=useState(false);
 
@@ -1969,12 +1969,13 @@ export default function App() {
     {/* Content */}
     <div style={{flex:1,overflowY:'auto',paddingBottom:extraTabs.includes(tab)?16:72}}>
       {tab==='dashboard'&&<Dashboard session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onNavigate={dest=>{
-        if(dest==='events'){setTab('events');}
-        else if(dest==='finances-devis'){setTab('finances');}
+        const k=Date.now();
+        if(dest==='events'){setEventsInitFilter({upcomingOnly:true,_k:k});setTab('events');}
+        else if(dest==='finances-devis'){setFinancesInitFilter({sub:'quotes',quotesFilter:{pendingOnly:true},_k:k});setTab('finances');}
         else if(dest==='rentabilite'){setTab('rentabilite');}
       }}/>}
-      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
-      {tab==='finances'&&<Finances session={session} initialFilter={financesInitFilter}/>}
+      {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events key={eventsInitFilter._k||0} session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
+      {tab==='finances'&&<Finances key={financesInitFilter._k||0} session={session} initialFilter={financesInitFilter}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
       {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
       {tab==='planning'&&<Planning session={session}/>}
