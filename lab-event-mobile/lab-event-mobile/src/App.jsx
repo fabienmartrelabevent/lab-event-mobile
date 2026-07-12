@@ -669,7 +669,15 @@ function Events({session, onCompanyClick, initialFilter={}}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
-  const sorted=[...(items||[])].sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
+  const _now=new Date();
+  const sorted=[...(items||[])].sort((a,b)=>{
+    const da=new Date(a.events_date_from||0), db=new Date(b.events_date_from||0);
+    const af=da>=_now, bf=db>=_now;
+    if(af&&!bf) return -1; // future avant passé
+    if(!af&&bf) return 1;
+    if(af&&bf) return da-db; // futurs: le plus proche en premier
+    return db-da; // passés: le plus récent en premier
+  });
   const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
   const now=new Date();
   const byDate=applyDateFilter(sorted,'events_date_from',datePeriod);
@@ -1209,7 +1217,13 @@ function Activites({session, onEventClick, onCompanyClick}) {
   const soon=all.filter(a=>!!a.deadline_is_soon_expired&&!a.deadline_is_expired);
 
   const q=search.toLowerCase();
-  const bySorted=[...all].sort((a,b)=>new Date(b.date||b.deadline||0)-new Date(a.date||a.deadline||0));
+  const bySorted=[...all].sort((a,b)=>{
+    // Expired first, then by deadline asc, then by date
+    if(a.deadline_is_expired&&!b.deadline_is_expired) return -1;
+    if(!a.deadline_is_expired&&b.deadline_is_expired) return 1;
+    const da=new Date(a.deadline||a.date||0), db=new Date(b.deadline||b.date||0);
+    return da-db; // échéance la plus proche en premier
+  });
   const expired2=bySorted.filter(a=>a.deadline_is_expired);
   const soon2=bySorted.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
   const byFilter=filter==='expired'?expired2:filter==='soon'?soon2:bySorted;
