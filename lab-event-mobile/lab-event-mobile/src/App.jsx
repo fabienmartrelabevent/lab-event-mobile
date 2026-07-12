@@ -339,10 +339,14 @@ function Dashboard({session, onEventClick, onNavigate}) {
       </div>)}
     </div>
 
-    <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:'0 0 10px'}}>Prochains événements</h2>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',margin:'0 0 10px'}}>
+      <h2 style={{fontSize:14,fontWeight:600,color:T.ink,margin:0}}>Prochains événements</h2>
+      {upcoming.length>5&&<button onClick={()=>onNavigate&&onNavigate('events')} style={{background:'none',border:'none',cursor:'pointer',fontSize:12,color:T.brand,fontWeight:500}}>Voir les {upcoming.length} →</button>}
+    </div>
     {upcoming.length===0?<Empty icon={Calendar} msg="Aucun événement à venir."/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {upcoming.slice(0,5).map((ev,i)=><EventRow key={ev.event_id||i} event={ev} onClick={()=>onEventClick(ev)}/>)}
+        {upcoming.length>5&&<button onClick={()=>onNavigate&&onNavigate('events')} style={{width:'100%',padding:'10px',borderRadius:10,border:`1px dashed ${T.border}`,background:'none',cursor:'pointer',fontSize:12.5,color:T.textMuted,fontWeight:500}}>+ {upcoming.length-5} événement{upcoming.length-5>1?'s':''} à venir — Voir tout</button>}
       </div>}
   </div>;
 }
@@ -2715,6 +2719,7 @@ function Support({onBack}) {
         {q:'Devis en cours (cliquable)', a:'Devis dont le statut ne contient pas "Signé", "Annulé" ou "Rejeté". Cliquer navigue vers Finances → Devis. Source : analytics/quotes sur 2 ans.'},
         {q:'CA HT signé 12 mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés (statut ^Signé) dont la date d\'événement est dans les 12 derniers mois. Cliquer navigue vers Rentabilité. ⚠️ L\'API ne fournit pas de date de signature — on filtre par date d\'événement.'},
         {q:'CA HT signé ce mois (cliquable)', a:'Somme du montant HT (total_ht) des devis signés dont la date d\'émission (date_of_quote) est dans le mois en cours. Cliquer navigue vers Finances → Devis. ⚠️ L\'API n\'expose pas de date de signature — on utilise la date d\'émission du devis comme proxy.'},
+        {q:'Prochains événements', a:'Affiche les 5 prochains événements futurs triés par date de début. Si tu en as plus de 5, un bouton "Voir les X →" permet d\'accéder à la liste complète filtrée. Le chiffre dans la card "À venir" indique le total réel.'},
         {q:'En cours / Gagnés / Perdus', a:'"Gagnés" et "Perdus" = champ win_lost de l\'événement défini manuellement. "En cours" = events sans win_lost renseigné ou avec win_lost = "En cours".'},
       ]
     },
