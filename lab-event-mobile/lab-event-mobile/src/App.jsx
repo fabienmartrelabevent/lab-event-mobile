@@ -501,8 +501,8 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     })();
   },[docTab, event, session]);
 
-  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
-  if(selectedDoc?.type==='bill') return <BillDetail bill={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
+  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onCompanyClick={onCompanyClick}/>;
+  if(selectedDoc?.type==='bill') return <BillDetail bill={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onCompanyClick={onCompanyClick}/>;
 
   return <div>
     <BackHeader title={event.event_name||'Événement'} subtitle={event.company_name||event.customer} onBack={onBack} badge={wl?<Badge label={wl} color={wlColor}/>:null}/>
@@ -838,7 +838,7 @@ function applyDateFilter(items, dateField, period) {
 }
 
 // ─── Finances ────────────────────────────────────────────────────
-function Finances({session, initialFilter={}}) {
+function Finances({session, initialFilter={}, onCompanyClick, onEventClick}) {
   const [sub,setSub]=useState(initialFilter.sub||'quotes');
   const [quotesFilter]=useState(initialFilter.quotesFilter||{});
   const [inDetail,setInDetail]=useState(false);
@@ -847,8 +847,8 @@ function Finances({session, initialFilter={}}) {
     {!inDetail&&<div style={{display:'flex',borderBottom:`1px solid ${T.border}`,background:T.surface,position:'sticky',top:0,zIndex:5}}>
       {tabs.map(t=><button key={t.k} onClick={()=>setSub(t.k)} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'12px 8px',fontSize:13,fontWeight:sub===t.k?600:400,color:sub===t.k?T.brand:T.textMuted,borderBottom:sub===t.k?`2px solid ${T.brand}`:'2px solid transparent',transition:'all 0.18s'}}>{t.label}</button>)}
     </div>}
-    {sub==='quotes'&&<Quotes session={session} onDetailChange={setInDetail} initialFilter={quotesFilter}/>}
-    {sub==='bills'&&<Bills session={session} onDetailChange={setInDetail}/>}
+    {sub==='quotes'&&<Quotes session={session} onDetailChange={setInDetail} initialFilter={quotesFilter} onCompanyClick={onCompanyClick} onEventClick={onEventClick}/>}
+    {sub==='bills'&&<Bills session={session} onDetailChange={setInDetail} onCompanyClick={onCompanyClick} onEventClick={onEventClick}/>}
     {sub==='payments'&&<Payments session={session}/>}
   </div>;
 }
@@ -870,7 +870,7 @@ function safeStr(v) {
   return String(v);
 }
 
-function QuoteDetail({quote:q, session, onBack, onEventClick}) {
+function QuoteDetail({quote:q, session, onBack, onEventClick, onCompanyClick}) {
   const [lines,setLines]=useState(null);
   const [renta,setRenta]=useState(null);
   const [loadingLines,setLoadingLines]=useState(true);
@@ -989,7 +989,19 @@ function QuoteDetail({quote:q, session, onBack, onEventClick}) {
       <Card style={{marginBottom:16}}>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
-          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+          {f.label==='Client'&&onCompanyClick?<button onClick={()=>{
+            const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
+            const cos=k?cacheArr(k):[];
+            const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());
+            if(co) onCompanyClick(co);
+          }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
+          :f.label==='Événement'&&onEventClick?<button onClick={()=>{
+            const evName=(f.value||'').toLowerCase();
+            const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
+            const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
+            if(ev) onEventClick(ev);
+          }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
+          :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>}
         </div>)}
       </Card>
 
@@ -997,20 +1009,11 @@ function QuoteDetail({quote:q, session, onBack, onEventClick}) {
         <div style={{fontSize:12,fontWeight:600,color:T.textMuted,marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>Notes</div>
         <div style={{fontSize:13,color:T.text,lineHeight:1.6}}>{strip(safeStr(q.info))}</div>
       </Card>}
-      {/* Lien vers l'événement */}
-      {(q.event||q.event_name)&&onEventClick&&<button onClick={()=>{
-        const evName=(q.event||q.event_name||'').toLowerCase();
-        const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-        const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
-        if(ev) onEventClick(ev);
-      }} style={{width:'100%',marginTop:12,padding:'12px 16px',borderRadius:10,border:`1px solid ${T.brand}`,background:T.brandSubtle,color:T.brand,fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-        <Calendar size={15}/> Voir l'événement : {q.event||q.event_name}
-      </button>}
     </div>
   </div>;
 }
 
-function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
+function Quotes({session, onDetailChange=()=>{}, initialFilter={}, onCompanyClick, onEventClick}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -1022,7 +1025,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
-  if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)}/>;
+  if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)} onCompanyClick={onCompanyClick} onEventClick={onEventClick}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
@@ -1064,7 +1067,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
   </div>;
 }
 
-function BillDetail({bill:b, session, onBack}) {
+function BillDetail({bill:b, session, onBack, onEventClick, onCompanyClick}) {
   const [lines,setLines]=useState(null);
   const [renta,setRenta]=useState(null);
   const [loadingLines,setLoadingLines]=useState(true);
@@ -1152,14 +1155,26 @@ function BillDetail({bill:b, session, onBack}) {
       <Card>
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
-          <span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>
+          {f.label==='Client'&&onCompanyClick?<button onClick={()=>{
+            const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
+            const cos=k?cacheArr(k):[];
+            const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());
+            if(co) onCompanyClick(co);
+          }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
+          :f.label==='Événement'&&onEventClick?<button onClick={()=>{
+            const evName=(f.value||'').toLowerCase();
+            const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
+            const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
+            if(ev) onEventClick(ev);
+          }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
+          :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>}
         </div>)}
       </Card>
     </div>
   </div>;
 }
 
-function Bills({session, onDetailChange=()=>{}}) {
+function Bills({session, onDetailChange=()=>{}, onCompanyClick, onEventClick}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
@@ -1169,7 +1184,7 @@ function Bills({session, onDetailChange=()=>{}}) {
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
-  if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)}/>;
+  if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)} onCompanyClick={onCompanyClick} onEventClick={onEventClick}/>;
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
   const q=search.toLowerCase();
@@ -2046,7 +2061,7 @@ export default function App() {
         else if(dest==='rentabilite'){setTab('rentabilite');}
       }}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events key={eventsInitFilter._k||0} session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
-      {tab==='finances'&&<Finances key={financesInitFilter._k||0} session={session} initialFilter={financesInitFilter}/>}
+      {tab==='finances'&&<Finances key={financesInitFilter._k||0} session={session} initialFilter={financesInitFilter} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
       {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
       {tab==='planning'&&<Planning session={session}/>}
