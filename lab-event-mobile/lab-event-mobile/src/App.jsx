@@ -774,11 +774,11 @@ function Planning({session}) {
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
               <div style={{minWidth:0,flex:1}}>
                 <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.event_name||'Sans nom'}</div>
+                {room&&<div style={{fontSize:13,fontWeight:700,color:T.secondary,marginTop:2,display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}><MapPin size={13} style={{flexShrink:0}}/>{room}</div>}
                 {client&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1}}>{client}</div>}
                 <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
                   {date(item.start_at)&&<span style={{display:'flex',alignItems:'center',gap:3}}><Calendar size={11}/>{date(item.start_at)}</span>}
                   {item.start_at&&<span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{item.start_at.substring(11,16)} → {(item.end_at||'').substring(11,16)}</span>}
-                  {room&&<span style={{display:'flex',alignItems:'center',gap:3}}><MapPin size={11}/>{room}</span>}
                   {item.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{item.number_of_persons}</span>:null}
                 </div>
               </div>
