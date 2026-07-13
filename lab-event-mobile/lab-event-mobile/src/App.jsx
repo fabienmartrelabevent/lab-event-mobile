@@ -79,6 +79,19 @@ function cacheArr(key) {
     return [];
   } catch { return []; }
 }
+// Les événements ('analytics_events') sont dans BIG_PATHS : jamais persistés en localStorage,
+// seulement en mémoire (_memCache). Une recherche via Object.keys(localStorage) ne les trouvera
+// donc jamais. On utilise cacheGet() (mémoire d'abord) avec la clé exacte de l'endpoint events.
+function findEventByName(session, name) {
+  if (!name || !session) return null;
+  const n = String(name).toLowerCase().trim();
+  if (!n) return null;
+  const key = cacheKey(session.subdomain, '/v3/analytics/events');
+  const cached = cacheGet(key);
+  const raw = cached?.data;
+  const arr = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+  return arr.find(e => (e.event_name||'').toLowerCase().trim() === n) || null;
+}
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
   let finalPath = path;
@@ -996,9 +1009,7 @@ function QuoteDetail({quote:q, session, onBack, onEventClick, onCompanyClick}) {
             if(co) onCompanyClick(co);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :f.label==='Événement'&&onEventClick?<button onClick={()=>{
-            const evName=(f.value||'').toLowerCase();
-            const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-            const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
+            const ev=findEventByName(session, f.value);
             if(ev) onEventClick(ev);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>}
@@ -1162,9 +1173,7 @@ function BillDetail({bill:b, session, onBack, onEventClick, onCompanyClick}) {
             if(co) onCompanyClick(co);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :f.label==='Événement'&&onEventClick?<button onClick={()=>{
-            const evName=(f.value||'').toLowerCase();
-            const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-            const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
+            const ev=findEventByName(session, f.value);
             if(ev) onEventClick(ev);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{f.value}</span>}
@@ -1335,9 +1344,7 @@ function Activites({session, onEventClick, onCompanyClick}) {
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:6,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:8}}>{strip(a.comment).slice(0,120)}{strip(a.comment).length>120?'…':''}</div>}
                 {(a.event_name||a.corporation_client_name)&&<div style={{display:'flex',gap:6,marginTop:6}}>
                   {a.event_name&&onEventClick&&<button onClick={()=>{
-                    const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')||k.includes('BIG')||true&&k.includes('events')&&!k.includes('vue')&&!k.includes('planning'));
-                    const evts=k?cacheArr(k):[];
-                    const ev=evts.find(e=>e.event_name===a.event_name);
+                    const ev=findEventByName(session, a.event_name);
                     if(ev) onEventClick(ev); else if(a.event_link) window.open(a.event_link,'_blank');
                   }} style={{fontSize:11.5,color:T.brand,background:'none',textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir événement</button>}
                   {a.corporation_client_name&&onCompanyClick&&<button onClick={()=>{
