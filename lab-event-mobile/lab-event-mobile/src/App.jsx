@@ -276,8 +276,8 @@ function Dashboard({session, onEventClick, onNavigate}) {
     setLoading(true);setErr('');
     try {
       const [e,q]=await Promise.all([
-        apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setEvents(Array.isArray(d)?d:[]);}).then(d=>d),
-        apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setQuotes(Array.isArray(d)?d:[]);}).then(d=>d),
+        apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setEvents(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}).then(d=>d),
+        apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setQuotes(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}).then(d=>d),
       ]);
       setEvents(Array.isArray(e)?e:[]);
       setQuotes(Array.isArray(q)?q:[]);
@@ -661,7 +661,7 @@ function Events({session, onCompanyClick, initialFilter={}}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events',{method:'POST',body:{events_date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -1005,7 +1005,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
   const [datePeriod,setDatePeriod]=useState(initialFilter.datePeriod||'');
   const [pendingOnly,setPendingOnly]=useState(initialFilter.pendingOnly||false);
   const [signedThisMonth,setSignedThisMonth]=useState(initialFilter.signedThisMonth||false);
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
   if(selected) return <QuoteDetail quote={selected} session={session} onBack={()=>setSelected(null)}/>;
@@ -1151,7 +1151,7 @@ function Bills({session, onDetailChange=()=>{}}) {
   const [search,setSearch]=useState('');
   const [selected,setSelected]=useState(null);
   const [datePeriod,setDatePeriod]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/bills',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
   if(selected) return <BillDetail bill={selected} session={session} onBack={()=>setSelected(null)}/>;
@@ -1196,7 +1196,7 @@ function Payments({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
   const [datePeriod,setDatePeriod]=useState('');
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/bill-prepayments',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -1239,7 +1239,7 @@ function Activites({session, onEventClick, onCompanyClick}) {
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
 
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -2127,7 +2127,7 @@ function Prestataires({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/partner-companies',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/partner-companies',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[])));setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2184,7 +2184,7 @@ function Rentabilite({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/rentability',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[])));setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2288,7 +2288,7 @@ function AnalyticsLight({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/vue-analytics-light',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[])));setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2492,7 +2492,7 @@ function Articles({session}) {
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/goods',{method:'POST',body:{}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/goods',{method:'POST',body:{}},d=>setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[])));setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
