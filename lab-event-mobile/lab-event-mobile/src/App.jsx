@@ -774,7 +774,7 @@ function Planning({session}) {
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
               <div style={{minWidth:0,flex:1}}>
                 <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.event_name||'Sans nom'}</div>
-                {room&&<div style={{fontSize:13,fontWeight:700,color:T.secondary,marginTop:2,display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}><MapPin size={13} style={{flexShrink:0}}/>{room}</div>}
+                {room&&<div style={{display:'inline-flex',alignItems:'center',gap:5,marginTop:4,marginBottom:1,padding:'3px 9px 3px 7px',borderRadius:7,background:T.brandTint,maxWidth:'100%'}}><MapPin size={14} color={T.brandStrong} style={{flexShrink:0}}/><span style={{fontSize:14,fontWeight:700,color:T.brandStrong,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{room}</span></div>}
                 {client&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1}}>{client}</div>}
                 <div style={{fontSize:12,color:T.textMuted,marginTop:3,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
                   {date(item.start_at)&&<span style={{display:'flex',alignItems:'center',gap:3}}><Calendar size={11}/>{date(item.start_at)}</span>}
@@ -2615,7 +2615,7 @@ function PlanningByDay({session}) {
               const room=r.room_name||r.product_real_name;
               return <Card key={r.composite_id||i} style={{padding:12}}>
               <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{r.event_name||'Événement'}</div>
-              {room&&<div style={{fontSize:12.5,fontWeight:700,color:T.secondary,marginTop:2,marginBottom:4,display:'flex',alignItems:'center',gap:4}}><MapPin size={12} style={{flexShrink:0}}/>{room}</div>}
+              {room&&<div style={{display:'inline-flex',alignItems:'center',gap:5,marginTop:3,marginBottom:5,padding:'3px 9px 3px 7px',borderRadius:7,background:T.brandTint,maxWidth:'100%'}}><MapPin size={13} color={T.brandStrong} style={{flexShrink:0}}/><span style={{fontSize:13.5,fontWeight:700,color:T.brandStrong,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{room}</span></div>}
               <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:room?0:4}}>
                 {r.assembly_date_start_client&&<div style={{fontSize:11.5,color:T.textMuted,display:'flex',gap:6}}>
                   <span style={{color:T.info,fontWeight:500}}>Montage client</span>
