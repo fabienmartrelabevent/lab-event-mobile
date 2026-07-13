@@ -767,7 +767,7 @@ function Planning({session}) {
     {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucune réservation à venir."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((item,i)=>{
-          const room=item.product_real_name||item.room_name||item.name;
+          const room=item.room_name||item.product_real_name||item.name;
           const client=[item.customer_name,item.customer_last_name].filter(Boolean).join(' ')||item.company_name;
           const timeStr=item.start_at&&item.end_at?`${dateTime(item.start_at).split(' ').slice(1).join(' ')} → ${dateTime(item.end_at).split(' ').slice(1).join(' ')}`:date(item.start_at);
           return <Card key={item.schedule_id||i} style={{padding:14}}>
