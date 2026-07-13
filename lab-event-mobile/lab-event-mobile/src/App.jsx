@@ -1434,9 +1434,10 @@ async function fetchAllPages(subdomain, token, basePath) {
 }
 
 // ─── Company Detail ───────────────────────────────────────────────
-function CompanyDetail({company, allCustomers, session, onBack}) {
+function CompanyDetail({company, allCustomers, session, onBack, onContactClick, onEventClick}) {
   const [tab, setTab] = useState('contacts');
   const [details, setDetails] = useState(null);
+  const [selectedDoc, setSelectedDoc] = useState(null); // {type:'quote'|'bill', data}
 
   useEffect(()=>{
     // Load full company details from API
@@ -1479,6 +1480,9 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
     {k:'activities',label:`Activités (${relActivities.length})`},
   ];
 
+  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onEventClick={onEventClick}/>;
+  if(selectedDoc?.type==='bill') return <BillDetail bill={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onEventClick={onEventClick}/>;
+
   return <div>
     <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+formatCountry(company.country):''}`} onBack={onBack}/>
     <div style={{padding:'16px 16px 8px'}}>
@@ -1510,7 +1514,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
       {/* Contacts */}
       {tab==='contacts'&&(linked.length===0?<Empty icon={UserRound} msg="Aucun contact lié."/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {linked.map((c,i)=><Card key={c.id||i} style={{padding:14}}>
+          {linked.map((c,i)=><Card key={c.id||i} onClick={onContactClick?()=>onContactClick(c):undefined} style={{padding:14}}>
             <div style={{display:'flex',alignItems:'center',gap:12}}>
               <div style={{width:36,height:36,borderRadius:9,background:`${T.info}1a`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><UserRound size={16} color={T.info}/></div>
               <div style={{minWidth:0,flex:1}}>
@@ -1528,7 +1532,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
       {/* Événements */}
       {tab==='events'&&(relEvents.length===0?<Empty icon={Calendar} msg="Aucun événement lié."/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {relEvents.map((ev,i)=><Card key={i} style={{padding:14}}>
+          {relEvents.map((ev,i)=><Card key={i} onClick={onEventClick?()=>onEventClick(ev):undefined} style={{padding:14}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ev.event_name}</div>
@@ -1548,7 +1552,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
       {/* Devis & Factures */}
       {tab==='docs'&&<div style={{display:'flex',flexDirection:'column',gap:8}}>
         {relQuotes.length===0&&relBills.length===0&&<Empty icon={FileText} msg="Aucun document lié."/>}
-        {relQuotes.map((q,i)=><Card key={`q${i}`} style={{padding:12}}>
+        {relQuotes.map((q,i)=><Card key={`q${i}`} onClick={()=>setSelectedDoc({type:'quote',data:q})} style={{padding:12}}>
           <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
             <div style={{flex:1}}>
               <div style={{fontSize:12.5,fontWeight:600,color:T.ink}}>{q.title||q.event||q.nb}</div>
@@ -1560,7 +1564,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
             </div>
           </div>
         </Card>)}
-        {relBills.map((b,i)=><Card key={`b${i}`} style={{padding:12,borderLeft:`3px solid ${T.info}`}}>
+        {relBills.map((b,i)=><Card key={`b${i}`} onClick={()=>setSelectedDoc({type:'bill',data:b})} style={{padding:12,borderLeft:`3px solid ${T.info}`}}>
           <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
             <div style={{flex:1}}>
               <div style={{fontSize:12.5,fontWeight:600,color:T.ink}}>{b.event||b.nb} <Badge label="Facture" color={T.info}/></div>
@@ -1584,6 +1588,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
                 <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
                 {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><Calendar size={11}/>{a.event_name}</div>}
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,100)}{strip(a.comment).length>100?'…':''}</div>}
+                {a.event_name&&onEventClick&&<button onClick={()=>{const ev=findEventByName(session,a.event_name);if(ev)onEventClick(ev);}} style={{fontSize:11.5,color:T.brand,background:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer',marginTop:6}}>Voir événement</button>}
                 <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8,flexWrap:'wrap'}}>
                   {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
                   {a.deadline&&<span style={{color:(()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})() ?T.danger:T.textSubtle}}>{ (()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})()?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
@@ -1597,7 +1602,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
 }
 
 // ─── Contacts ────────────────────────────────────────────────────
-function Contacts({session, initialCompany, onConsumeInitial}) {
+function Contacts({session, initialCompany, onConsumeInitial, onEventClick}) {
   const [companies,setCompanies]=useState(null);
   const [customers,setCustomers]=useState(null);
   const [err,setErr]=useState('');
@@ -1631,8 +1636,8 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
   if(loading) return <div style={{padding:16}}><Spinner/><p style={{textAlign:'center',fontSize:12,color:T.textMuted}}>Chargement de tous les contacts…</p></div>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  if(selectedContact) return <ContactDetail contact={selectedContact} session={session} onBack={()=>setSelectedContact(null)} onCompanyClick={co=>{setSelectedContact(null);setSelectedCompany(co);}}/>;  
-  if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} session={session} onBack={()=>setSelectedCompany(null)}/>;
+  if(selectedContact) return <ContactDetail contact={selectedContact} session={session} onBack={()=>setSelectedContact(null)} onCompanyClick={co=>{setSelectedContact(null);setSelectedCompany(co);}} onEventClick={onEventClick}/>;  
+  if(selectedCompany) return <CompanyDetail company={selectedCompany} allCustomers={customers||[]} session={session} onBack={()=>setSelectedCompany(null)} onContactClick={c=>setSelectedContact(c)} onEventClick={onEventClick}/>;
 
   const q=search.toLowerCase();
   const allCo=companies||[];
@@ -2119,7 +2124,7 @@ export default function App() {
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events key={eventsInitFilter._k||0} session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
       {tab==='finances'&&<Finances key={financesInitFilter._k||0} session={session} initialFilter={financesInitFilter} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
       {tab==='activites'&&<Activites session={session} onEventClick={ev=>{setEventDetail(ev);setTab('events');}} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>}
-      {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)}/>}
+      {tab==='contacts'&&<Contacts session={session} initialCompany={companyDetailOverride} onConsumeInitial={()=>setCompanyDetailOverride(null)} onEventClick={ev=>{setEventDetail(ev);setTab('events');}}/>}
       {tab==='planning'&&<Planning session={session}/>}
       {tab==='prestataires'&&<Prestataires session={session}/>}
       {tab==='rentabilite'&&<Rentabilite session={session}/>}
@@ -2729,8 +2734,9 @@ function PlanningByDay({session}) {
 }
 
 // ─── ContactDetail ───────────────────────────────────────────────
-function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
+function ContactDetail({contact: c, session, onBack, onCompanyClick, onEventClick}) {
   const [tab,setTab]=useState('infos');
+  const [selectedDoc,setSelectedDoc]=useState(null); // {type:'quote', data}
   const coName=(c.company?.name||'').toLowerCase();
   const cName=[c.name,c.last_name].filter(Boolean).join(' ').toLowerCase();
 
@@ -2744,6 +2750,8 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
   const fullName=[civLabel,c.name,c.last_name].filter(Boolean).join(' ');
 
   const tabs=[{k:'infos',label:'Infos'},{k:'events',label:`Événements (${evts.length})`},{k:'docs',label:`Devis (${quotes.length})`},{k:'activities',label:`Activités (${acts.length})`}];
+
+  if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)} onEventClick={onEventClick}/>;
 
   return <div>
     <BackHeader title={fullName||'Contact'} subtitle={c.position||c.company?.name} onBack={onBack}/>
@@ -2770,7 +2778,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
       </>}
       {tab==='events'&&(evts.length===0?<Empty icon={Calendar} msg="Aucun événement lié."/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {evts.map((ev,i)=><Card key={i} style={{padding:14}}>
+          {evts.map((ev,i)=><Card key={i} onClick={onEventClick?()=>onEventClick(ev):undefined} style={{padding:14}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ev.event_name}</div>
@@ -2785,7 +2793,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
         </div>)}
       {tab==='docs'&&(quotes.length===0?<Empty icon={FileText} msg="Aucun devis lié."/>:
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {quotes.map((q,i)=><Card key={i} style={{padding:12}}>
+          {quotes.map((q,i)=><Card key={i} onClick={()=>setSelectedDoc({type:'quote',data:q})} style={{padding:12}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{q.title||q.event||q.nb}</div>
@@ -2804,6 +2812,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
             <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
             {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><Calendar size={11}/>{a.event_name}</div>}
             {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,100)}</div>}
+            {a.event_name&&onEventClick&&<button onClick={()=>{const ev=findEventByName(session,a.event_name);if(ev)onEventClick(ev);}} style={{fontSize:11.5,color:T.brand,background:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer',marginTop:6}}>Voir événement</button>}
             <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8}}>
               {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
               {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:T.textSubtle}}>Échéance: {date(a.deadline)}</span>}
