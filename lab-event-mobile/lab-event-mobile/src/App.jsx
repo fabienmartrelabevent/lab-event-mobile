@@ -1365,7 +1365,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
   ];
 
   return <div>
-    <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+company.country:''}`} onBack={onBack}/>
+    <BackHeader title={company.name||'Société'} subtitle={company.city&&`${company.city}${company.country?', '+formatCountry(company.country):''}`} onBack={onBack}/>
     <div style={{padding:'16px 16px 8px'}}>
       <Card style={{marginBottom:12}}>
         {[
@@ -1546,7 +1546,7 @@ function Contacts({session, initialCompany, onConsumeInitial}) {
                 <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Building2 size={16} color={T.brand}/></div>
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{c.name||'Sans nom'}</div>
-                  {c.city&&<div style={{fontSize:12,color:T.textMuted}}>{c.city}{c.country?`, ${c.country}`:''}</div>}
+                  {c.city&&<div style={{fontSize:12,color:T.textMuted}}>{c.city}{c.country?`, ${formatCountry(c.country)}`:''}</div>}
                 </div>
                 <ChevronRight size={16} color={T.textSubtle}/>
               </div>
@@ -2120,7 +2120,7 @@ function Prestataires({session}) {
               <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.name||'Sans nom'}</div>
               <div style={{display:'flex',gap:8,marginTop:3,flexWrap:'wrap'}}>
                 {p.company_type&&<Badge label={p.company_type} color={T.secondary}/>}
-                {p.country&&<span style={{fontSize:11.5,color:T.textMuted}}>{p.country}</span>}
+                {p.country&&<span style={{fontSize:11.5,color:T.textMuted}}>{formatCountry(p.country)}</span>}
               </div>
               {(p.total_ttc_quotes_signed||p.total_ttc_bills_signed)&&<div style={{display:'flex',gap:12,marginTop:6,flexWrap:'wrap'}}>
                 {p.total_ttc_quotes_signed&&<div style={{fontSize:12}}>
