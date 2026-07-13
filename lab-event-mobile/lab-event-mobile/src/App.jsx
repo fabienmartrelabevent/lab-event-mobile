@@ -2611,9 +2611,12 @@ function PlanningByDay({session}) {
         {Object.entries(byDate).map(([d,rows])=><div key={d}>
           <div style={{fontSize:12,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6,paddingLeft:4}}>{date(d)}</div>
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
-            {rows.map((r,i)=><Card key={r.composite_id||i} style={{padding:12}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.ink,marginBottom:4}}>{r.event_name||'Événement'}</div>
-              <div style={{display:'flex',flexDirection:'column',gap:3}}>
+            {rows.map((r,i)=>{
+              const room=r.room_name||r.product_real_name;
+              return <Card key={r.composite_id||i} style={{padding:12}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{r.event_name||'Événement'}</div>
+              {room&&<div style={{fontSize:12.5,fontWeight:700,color:T.secondary,marginTop:2,marginBottom:4,display:'flex',alignItems:'center',gap:4}}><MapPin size={12} style={{flexShrink:0}}/>{room}</div>}
+              <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:room?0:4}}>
                 {r.assembly_date_start_client&&<div style={{fontSize:11.5,color:T.textMuted,display:'flex',gap:6}}>
                   <span style={{color:T.info,fontWeight:500}}>Montage client</span>
                   <span>{date(r.assembly_date_start_client)}{r.assembly_date_end_client&&r.assembly_date_end_client!==r.assembly_date_start_client?` → ${date(r.assembly_date_end_client)}`:''}</span>
@@ -2629,7 +2632,7 @@ function PlanningByDay({session}) {
                 {r.assembly_comment_client&&<div style={{fontSize:11.5,color:T.textMuted,borderLeft:`2px solid ${T.border}`,paddingLeft:6,marginTop:2}}>{strip(r.assembly_comment_client).slice(0,100)}</div>}
               </div>
               {r.day_number&&<div style={{fontSize:11,color:T.textSubtle,marginTop:4}}>Jour {r.day_number}</div>}
-            </Card>)}
+            </Card>;})}
           </div>
         </div>)}
       </div>}
