@@ -357,7 +357,7 @@ function Dashboard({session, onEventClick, onNavigate}) {
   const kpis=[
     {label:'À venir', value:upcoming.length, accent:T.brand, icon:Calendar, hint:'events', onClick:()=>onNavigate&&onNavigate('events')},
     {label:'Devis en cours', value:pending.length, accent:T.warning, icon:FileText, hint:'finances', onClick:()=>onNavigate&&onNavigate('finances-devis')},
-    {label:'CA HT signé 12 mois', value:money(ca12mHT), accent:T.success, icon:Euro, hint:'Par date événement', onClick:()=>onNavigate&&onNavigate('rentabilite')},
+    {label:'CA HT 12 derniers mois', value:money(ca12mHT), accent:T.success, icon:Euro, hint:'Devis signés, par date événement', onClick:()=>onNavigate&&onNavigate('finances-signes-12m')},
     {label:'CA HT signé ce mois', value:money(caThisMonthHT), accent:T.info, icon:Euro, hint:'Par date devis', onClick:()=>onNavigate&&onNavigate('finances-signes-mois')},
   ];
 
@@ -1048,6 +1048,7 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}, onCompanyClic
   const [datePeriod,setDatePeriod]=useState(initialFilter.datePeriod||'');
   const [pendingOnly,setPendingOnly]=useState(initialFilter.pendingOnly||false);
   const [signedThisMonth,setSignedThisMonth]=useState(initialFilter.signedThisMonth||false);
+  const [signed12m,setSigned12m]=useState(initialFilter.signed12m||false);
   const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/finance-documents/quotes',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{ onDetailChange(!!selected); },[selected]);
@@ -1060,19 +1061,22 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}, onCompanyClic
   const byPending=pendingOnly?byDate.filter(q=>!/sign|annul|rejet/i.test(q.status||'')):byDate;
   const thisMonthStart=new Date(new Date().getFullYear(),new Date().getMonth(),1);
   const bySignedMonth=signedThisMonth?byPending.filter(q=>/^sign[ée]/i.test(q.status||'')&&q.date_of_quote&&new Date(q.date_of_quote)>=thisMonthStart):byPending;
-  const filtered=q?bySignedMonth.filter(d=>
+  const last12m=new Date(); last12m.setFullYear(last12m.getFullYear()-1);
+  const bySigned12m=signed12m?bySignedMonth.filter(q=>/^sign[ée]/i.test(q.status||'')&&q.date_of_event&&new Date(q.date_of_event)>=last12m):bySignedMonth;
+  const filtered=q?bySigned12m.filter(d=>
     (d.title||'').toLowerCase().includes(q)||
     (d.event||'').toLowerCase().includes(q)||
     (d.nb||'').toLowerCase().includes(q)||
     (d.customer||'').toLowerCase().includes(q)||
     (d.status||'').toLowerCase().includes(q)
-  ):bySignedMonth;
+  ):bySigned12m;
   return <div style={{padding:'12px 16px 16px'}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom, numéro, client, statut…"/>
     <DateFilter value={datePeriod} onChange={setDatePeriod}/>
     {pendingOnly&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.warning,fontWeight:600}}>📋 Devis en cours uniquement</span><button onClick={()=>setPendingOnly(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
     {signedThisMonth&&<div style={{background:`${T.success}12`,border:`1.5px solid ${T.success}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.success,fontWeight:600}}>✅ Devis signés ce mois</span><button onClick={()=>setSignedThisMonth(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
-    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod||pendingOnly||signedThisMonth)?` sur ${sorted.length}`:''}</div>
+    {signed12m&&<div style={{background:`${T.success}12`,border:`1.5px solid ${T.success}66`,borderRadius:8,padding:'8px 12px',marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12.5}}><span style={{color:T.success,fontWeight:600}}>✅ Devis signés — 12 derniers mois</span><button onClick={()=>setSigned12m(false)} style={{background:'none',border:'none',cursor:'pointer',color:T.textMuted,fontSize:12,padding:'0 4px'}}>✕ Tout voir</button></div>}
+    <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} devis{(q||datePeriod||pendingOnly||signedThisMonth||signed12m)?` sur ${sorted.length}`:''}</div>
     {filtered.length===0?<Empty icon={FileText} msg={q?"Aucun résultat.":"Aucun devis."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((item,i)=><Card key={item.quote_id||i} onClick={()=>setSelected(item)} style={{padding:14}}>
@@ -2120,6 +2124,7 @@ export default function App() {
         if(dest==='events'){setEventsInitFilter({upcomingOnly:true,_k:k});setTab('events');}
         else if(dest==='finances-devis'){setFinancesInitFilter({sub:'quotes',quotesFilter:{pendingOnly:true},_k:k});setTab('finances');}
         else if(dest==='finances-signes-mois'){setFinancesInitFilter({sub:'quotes',quotesFilter:{signedThisMonth:true},_k:k});setTab('finances');}
+        else if(dest==='finances-signes-12m'){setFinancesInitFilter({sub:'quotes',quotesFilter:{signed12m:true},_k:k});setTab('finances');}
         else if(dest==='rentabilite'){setTab('rentabilite');}
       }}/>}
       {tab==='events'&&(eventDetail?<EventDetail event={eventDetail} session={session} onBack={()=>setEventDetail(null)} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}}/>:<Events key={eventsInitFilter._k||0} session={session} onCompanyClick={co=>{setCompanyDetailOverride(co);setTab('contacts');}} initialFilter={eventsInitFilter}/>)}
