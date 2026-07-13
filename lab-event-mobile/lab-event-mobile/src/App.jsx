@@ -714,12 +714,32 @@ function Planning({session}) {
   const [items,setItems]=useState(null);
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
+  const [truncated,setTruncated]=useState(false);
 
   const [search,setSearch]=useState('');
 
+  // Même souci que Planning par jour : l'API renvoie son historique depuis le début, plafonné
+  // à 2000 lignes par page, donc date_from seul ne suffit pas à atteindre les dates futures.
+  // On paginate jusqu'à croiser des réservations proches d'aujourd'hui.
   const load=useCallback(async()=>{
-    setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:[])});setItems(Array.isArray(d)?d:[]);}
+    setLoading(true);setErr('');setTruncated(false);
+    try{
+      const threshold=new Date(); threshold.setDate(threshold.getDate()-3); threshold.setHours(0,0,0,0);
+      const MAX_PAGES=25;
+      let all=[]; let page=1; let reachedRecent=false; let lastBatchSize=0;
+      while(page<=MAX_PAGES){
+        const batch=await api(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans(),page}});
+        const arr=Array.isArray(batch)?batch:(batch?.data||[]);
+        lastBatchSize=arr.length;
+        if(arr.length===0) break;
+        all=all.concat(arr);
+        reachedRecent=arr.some(r=>(r.end_at||r.start_at)&&new Date(r.end_at||r.start_at)>=threshold);
+        if(reachedRecent||arr.length<2000) break;
+        page++;
+      }
+      if(!reachedRecent&&lastBatchSize>=2000) setTruncated(true);
+      setItems(all);
+    }
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -728,7 +748,10 @@ function Planning({session}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
-  const sorted=[...(items||[])].sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0));
+  const threshold=new Date(); threshold.setDate(threshold.getDate()-3); threshold.setHours(0,0,0,0);
+  // On ne garde que les réservations en cours ou à venir (fin >= seuil)
+  const future=(items||[]).filter(r=>(r.end_at||r.start_at)&&new Date(r.end_at||r.start_at)>=threshold);
+  const sorted=[...future].sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0));
   const filtered=q?sorted.filter(i=>
     (i.event_name||'').toLowerCase().includes(q)||
     (i.room_name||'').toLowerCase().includes(q)||
@@ -737,10 +760,13 @@ function Planning({session}) {
 
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Nom événement, salle…"/>
+    {truncated&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:T.warning,lineHeight:1.5}}>
+      ⚠ L'historique est trop volumineux : la limite de pages a été atteinte avant de rejoindre les réservations récentes. Certaines peuvent manquer — réessayer ou contacter le support si le problème persiste.
+    </div>}
     <div style={{fontSize:12,color:T.textMuted,marginBottom:10}}>{filtered.length} réservation{filtered.length>1?'s':''}{q?` sur ${sorted.length}`:''}</div>
-    {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucune réservation planifiée."}/>:
+    {filtered.length===0?<Empty icon={Calendar} msg={q?"Aucun résultat.":"Aucune réservation à venir."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {sorted.map((item,i)=>{
+        {filtered.map((item,i)=>{
           const room=item.product_real_name||item.room_name||item.name;
           const client=[item.customer_name,item.customer_last_name].filter(Boolean).join(' ')||item.company_name;
           const timeStr=item.start_at&&item.end_at?`${dateTime(item.start_at).split(' ').slice(1).join(' ')} → ${dateTime(item.end_at).split(' ').slice(1).join(' ')}`:date(item.start_at);
