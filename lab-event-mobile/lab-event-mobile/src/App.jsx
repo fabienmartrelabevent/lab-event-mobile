@@ -1941,9 +1941,6 @@ export default function App() {
       {k:'articles',label:'Articles',icon:FileText},
     ]},
     {section:'Aide',items:[
-      {k:'support',label:'Support & Aide',icon:Activity},
-    ]},
-    {section:'Aide',items:[
       {k:'support',label:'Support & Aide',icon:FileText},
     ]},
   ];
@@ -2016,7 +2013,6 @@ export default function App() {
       {tab==='scheduler'&&<SchedulerView session={session}/>}
       {tab==='articles'&&<Articles session={session}/>}
       {tab==='planningbyday'&&<PlanningByDay session={session}/>}
-      {tab==='support'&&<Support onBack={()=>setTab('dashboard')}/>}
       {tab==='support'&&<Support onBack={()=>setTab('dashboard')}/>}
     </div>
     {/* Bottom nav */}
