@@ -1191,9 +1191,10 @@ function Bills({session, onDetailChange=()=>{}}) {
         {filtered.map((b,i)=><Card key={b.bill_id||i} onClick={()=>setSelected(b)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.event||b.customer||'Facture'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{b.nb} · {date(b.date)}</div>
-              {b.contact_name&&<div style={{fontSize:12,color:T.textMuted}}>{b.contact_name}</div>}
+              {b.nb&&<div style={{fontSize:14,fontWeight:700,color:T.brandStrong,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.nb}</div>}
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.event||b.customer||'Facture'}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Facturé le {date(b.date)}</div>
+              {b.customer&&<div style={{fontSize:12,color:T.textMuted}}>{b.customer}</div>}
             </div>
             <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
               <div style={{fontSize:13.5,fontWeight:700,color:T.ink}}>{money(b.total_ht||b.ttc)} <span style={{fontSize:10,color:T.textMuted}}>HT</span></div>
