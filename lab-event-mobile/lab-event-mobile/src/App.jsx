@@ -2364,8 +2364,9 @@ function SchedulerView({session}) {
     setLoading(true);setErr('');
     try{
       // La réponse a la forme {resourceTimeRanges,resources,assignments,project,timeRanges,events:[...]}
-      // Les réservations utiles sont dans le tableau "events".
-      const d=await apiCached(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{startDate:fmt(today),endDate:fmt(end)}},d=>setItems(Array.isArray(d?.events)?d.events:[]));
+      // Les réservations utiles sont dans le tableau "events". Pas de cache ici : données temps réel,
+      // et le cache partagé par path (sans le body) posait des soucis de fraîcheur sur cet endpoint.
+      const d=await api(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{startDate:fmt(today),endDate:fmt(end)}});
       setItems(Array.isArray(d?.events)?d.events:[]);
     }catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
