@@ -2045,33 +2045,45 @@ function PartnerDetail({partner, session, onBack}) {
   },[partnerId, session]);
   const p = {...partner, ...details}; // fusion : ne perd jamais les données déjà connues (analytics)
 
+  // Champs garantis par /v3/analytics/partner-companies (voir doc API) + bonus si l'enrichissement customer-company matche
   const fields = [
     {label:'Type', value:p.type_name||p.company_type},
+    {label:'Potentiel', value:p.potential},
     {label:'Ville', value:p.city||(p.address?.city)},
+    {label:'Code postal', value:p.zip_code||p.address?.zipcode},
     {label:'Pays', value:formatCountry(p.country||p.address?.country)},
     {label:'Adresse', value:p.address?.street_1},
-    {label:'Code postal', value:p.address?.zipcode},
+    {label:'Code APE', value:p.code_ape},
     {label:'Site web', value:p.web_site},
     {label:'Email', value:p.finance?.contact?.email, link:`mailto:${p.finance?.contact?.email}`},
     {label:'Téléphone', value:p.finance?.contact?.phone, link:`tel:${p.finance?.contact?.phone}`},
     {label:'SIRET', value:p.finance?.siret||p.data?.nb_siret},
     {label:'N° TVA', value:p.finance?.tva_number||p.data?.tva_number},
     {label:'Langue', value:p.company_language},
+    {label:'Exposant', value:p.is_exposant?'Oui':null},
   ].filter(f=>f.value&&f.value!=='null'&&safeStr(f.value));
 
   return <div>
     <BackHeader title={p.name||'Prestataire'} subtitle={p.city} onBack={onBack}/>
     <div style={{padding:'20px 16px 32px'}}>
-      {/* Montants */}
-      {(partner.total_ttc_quotes_signed||partner.total_ttc_bills_signed)&&<div style={{display:'flex',gap:8,marginBottom:16}}>
-        {partner.total_ttc_quotes_signed&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
-          <div style={{fontSize:10.5,color:T.textMuted}}>Devis signés</div>
+      {/* Montants HT + TTC */}
+      {(partner.total_ttc_quotes_signed||partner.total_ttc_bills_signed||partner.total_ht_quotes_signed||partner.total_ht_bills_signed)&&<div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        {partner.total_ht_quotes_signed?<div style={{flex:1,minWidth:100,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Devis signés HT</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:T.brand}}>{money(partner.total_ht_quotes_signed)}</div>
+        </div>:null}
+        {partner.total_ttc_quotes_signed?<div style={{flex:1,minWidth:100,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Devis signés TTC</div>
           <div style={{fontSize:13.5,fontWeight:700,color:T.brand}}>{money(partner.total_ttc_quotes_signed)}</div>
-        </div>}
-        {partner.total_ttc_bills_signed&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
-          <div style={{fontSize:10.5,color:T.textMuted}}>Facturé</div>
+        </div>:null}
+        {partner.total_ht_bills_signed?<div style={{flex:1,minWidth:100,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Facturé HT</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:T.success}}>{money(partner.total_ht_bills_signed)}</div>
+        </div>:null}
+        {partner.total_ttc_bills_signed?<div style={{flex:1,minWidth:100,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+          <div style={{fontSize:10.5,color:T.textMuted}}>Facturé TTC</div>
           <div style={{fontSize:13.5,fontWeight:700,color:T.success}}>{money(partner.total_ttc_bills_signed)}</div>
-        </div>}
+        </div>:null}
       </div>}
       <Card>
         {fields.map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
