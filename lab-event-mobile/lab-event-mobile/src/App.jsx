@@ -2050,8 +2050,8 @@ export default function App() {
     ]},
     {section:'Commercial & Finance',items:[
       {k:'prestataires',label:'Prestataires (bêta)',icon:Briefcase},
-      {k:'rentabilite',label:'Rentabilité',icon:TrendingUp},
-      {k:'analytics',label:'Analytics produits',icon:TrendingUp},
+      {k:'rentabilite',label:'Rentabilité (bêta)',icon:TrendingUp},
+      {k:'analytics',label:'Analytics produits (bêta)',icon:TrendingUp},
     ]},
     {section:'Planning',items:[
       {k:'planning',label:'Planning salles',icon:Calendar},
