@@ -1278,8 +1278,28 @@ function Activites({session, onEventClick, onCompanyClick}) {
   const [loading,setLoading]=useState(true);
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
+  const [truncated,setTruncated]=useState(false);
 
-  const load=useCallback(async()=>{setLoading(true);setErr('');try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans()}},d=>{setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]))});setItems(Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:[]));}catch(e){setErr(e.message);}finally{setLoading(false);}},  [session]);
+  // Certains comptes ont plus de 2000 activités : l'API plafonne à 2000 lignes/page.
+  // On paginate (convention page/per_page utilisée ailleurs sur cette API) jusqu'à
+  // une page incomplète (= dernière page), avec un garde-fou de pages.
+  const load=useCallback(async()=>{
+    setLoading(true);setErr('');setTruncated(false);
+    try{
+      const MAX_PAGES=25;
+      let all=[]; let page=1;
+      while(page<=MAX_PAGES){
+        const batch=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans(),page}});
+        const arr=Array.isArray(batch)?batch:(Array.isArray(batch?.data)?batch.data:[]);
+        if(arr.length===0) break;
+        all=all.concat(arr);
+        if(arr.length<2000) break; // dernière page atteinte
+        page++;
+      }
+      if(page>MAX_PAGES) setTruncated(true);
+      setItems(all);
+    }catch(e){setErr(e.message);}finally{setLoading(false);}
+  },[session]);
   useEffect(()=>{load();},[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
@@ -1317,6 +1337,9 @@ function Activites({session, onEventClick, onCompanyClick}) {
 
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Client, contact, événement, type…"/>
+    {truncated&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:T.warning,lineHeight:1.5}}>
+      ⚠ Ce compte a beaucoup d'activités : la limite de pages a été atteinte. Certaines activités peuvent manquer — réessayer ou contacter le support si le problème persiste.
+    </div>}
     {expired.length>0&&<div style={{display:'flex',alignItems:'center',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12.5,color:T.danger}}>
       <AlertTriangle size={15}/><span>{expired.length} activité{expired.length>1?'s':''} en retard</span>
     </div>}
