@@ -856,7 +856,8 @@ function applyDateFilter(items, dateField, period) {
   if (period==='30d') from.setDate(from.getDate()-30);
   else if (period==='90d') from.setDate(from.getDate()-90);
   else if (period==='6m') from.setMonth(from.getMonth()-6);
-  else if (period==='year'||period==='12m') from.setFullYear(from.getFullYear()-1);
+  else if (period==='year'||period==='12m') from.setFullYear(from.getFullYear()-1); // fenêtre glissante 1 an (utilisé par le DateFilter partagé "1 an")
+  else if (period==='ytd') { from=new Date(now.getFullYear(),0,1); } // vrai 1er janvier de l'année en cours ("Cette année")
   // Legacy calendar periods
   else if (period==='month') { from=new Date(now.getFullYear(),now.getMonth(),1); }
   else if (period==='quarter') { from=new Date(now.getFullYear(),Math.floor(now.getMonth()/3)*3,1); }
@@ -2272,7 +2273,7 @@ function Rentabilite({session}) {
   const [loading,setLoading]=useState(true);
   const [signedOnly,setSignedOnly]=useState(true);
   const [search,setSearch]=useState('');
-  const [period,setPeriod]=useState('year');
+  const [period,setPeriod]=useState('ytd');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -2313,7 +2314,7 @@ function Rentabilite({session}) {
   return <div style={{padding:16}}>
     {/* Filtre période */}
     <div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
-      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trimestre'},{k:'year',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'6px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trimestre'},{k:'ytd',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'6px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
     </div>
     {/* Filtre signé */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
@@ -2376,7 +2377,7 @@ function AnalyticsLight({session}) {
   const [search,setSearch]=useState('');
   const [filterSection,setFilterSection]=useState('');
   const [sortBy,setSortBy]=useState('ca');
-  const [period,setPeriod]=useState('year');
+  const [period,setPeriod]=useState('ytd');
 
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
@@ -2420,7 +2421,7 @@ function AnalyticsLight({session}) {
   return <div style={{padding:16}}>
     {/* Filtre période */}
     <div style={{display:'flex',gap:5,marginBottom:10,flexWrap:'wrap'}}>
-      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trim.'},{k:'year',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+      {[{k:'month',label:'Ce mois'},{k:'quarter',label:'Ce trim.'},{k:'ytd',label:'Cette année'},{k:'12m',label:'12 mois'},{k:'',label:'2 ans'}].map(o=><button key={o.k||'all'} onClick={()=>setPeriod(o.k)} style={{flex:1,padding:'5px 4px',borderRadius:8,border:`1.5px solid ${period===o.k?T.brand:T.border}`,background:period===o.k?T.brandTint:'none',color:period===o.k?T.brand:T.textMuted,fontSize:11,fontWeight:period===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
     </div>
     {/* Filtre section — liste déroulante */}
     {sections.length>0&&<select value={filterSection} onChange={e=>setFilterSection(e.target.value)} style={{width:'100%',minHeight:40,padding:'0 12px',marginBottom:10,border:`1.5px solid ${T.border}`,borderRadius:8,fontSize:13.5,color:T.ink,background:T.surface,outline:'none',boxSizing:'border-box'}}>
