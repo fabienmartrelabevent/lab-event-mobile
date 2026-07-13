@@ -86,11 +86,17 @@ function findEventByName(session, name) {
   if (!name || !session) return null;
   const n = String(name).toLowerCase().trim();
   if (!n) return null;
+  const arr = eventsArr(session);
+  return arr.find(e => (e.event_name||'').toLowerCase().trim() === n) || null;
+}
+// Même logique que findEventByName mais renvoie le tableau complet (pour filtrer les
+// événements liés à une société/un contact dans leurs fiches détail respectives).
+function eventsArr(session) {
+  if (!session) return [];
   const key = cacheKey(session.subdomain, '/v3/analytics/events');
   const cached = cacheGet(key);
   const raw = cached?.data;
-  const arr = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
-  return arr.find(e => (e.event_name||'').toLowerCase().trim() === n) || null;
+  return Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
 }
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
@@ -1437,8 +1443,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
 
   // Load related data from cache
   const relEvents = (() => { try {
-    const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-    return k?cacheArr(k).filter(e=>(e.company_name||e.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];
+    return eventsArr(session).filter(e=>(e.company_name||e.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));
   } catch{return [];} })();
 
   const relQuotes = (() => { try {
@@ -2718,7 +2723,7 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
   const coName=(c.company?.name||'').toLowerCase();
   const cName=[c.name,c.last_name].filter(Boolean).join(' ').toLowerCase();
 
-  const relEvents=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue'));return k?cacheArr(k).filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];}catch{return [];}};
+  const relEvents=()=>{try{return eventsArr(session).filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));}catch{return [];}};
   const relQuotes=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('quotes'));return k?cacheArr(k).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];}catch{return [];}};
   const relActivities=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('activity'));return k?cacheArr(k).filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];}catch{return [];}};
 
