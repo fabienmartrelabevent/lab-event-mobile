@@ -170,6 +170,14 @@ function dateJ2Ans() {
   return d.toISOString().split('T')[0];
 }
 
+// Date j-6 mois pour filtrer les activités (fenêtre glissante, évite les comptes
+// à plusieurs milliers d'activités de dépasser le plafond de pagination de l'API)
+function dateJ6Mois() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 6);
+  return d.toISOString().split('T')[0];
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────
 const money = n => n==null||isNaN(n)?'—':new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
 const date  = d => { if(!d) return '—'; try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short',year:'numeric'}).format(new Date(d)); } catch{return d;} };
@@ -1280,16 +1288,17 @@ function Activites({session, onEventClick, onCompanyClick}) {
   const [search,setSearch]=useState('');
   const [truncated,setTruncated]=useState(false);
 
-  // Certains comptes ont plus de 2000 activités : l'API plafonne à 2000 lignes/page.
-  // On paginate (convention page/per_page utilisée ailleurs sur cette API) jusqu'à
-  // une page incomplète (= dernière page), avec un garde-fou de pages.
+  // Fenêtre glissante : 6 mois passés + tout le futur. Sur la quasi-totalité des
+  // comptes ça tient en une seule page (évite les timeouts liés à la pagination sur
+  // les comptes à plusieurs milliers d'activités). Garde-fou de pagination conservé
+  // au cas où un compte très actif dépasse quand même 2000 lignes sur 6 mois.
   const load=useCallback(async()=>{
     setLoading(true);setErr('');setTruncated(false);
     try{
-      const MAX_PAGES=25;
+      const MAX_PAGES=5;
       let all=[]; let page=1;
       while(page<=MAX_PAGES){
-        const batch=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ2Ans(),page}});
+        const batch=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ6Mois(),page}});
         const arr=Array.isArray(batch)?batch:(Array.isArray(batch?.data)?batch.data:[]);
         if(arr.length===0) break;
         all=all.concat(arr);
@@ -1338,8 +1347,9 @@ function Activites({session, onEventClick, onCompanyClick}) {
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Client, contact, événement, type…"/>
     {truncated&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:T.warning,lineHeight:1.5}}>
-      ⚠ Ce compte a beaucoup d'activités : la limite de pages a été atteinte. Certaines activités peuvent manquer — réessayer ou contacter le support si le problème persiste.
+      ⚠ Ce compte a beaucoup d'activités sur les 6 derniers mois : certaines peuvent manquer — réessayer ou contacter le support si le problème persiste.
     </div>}
+    <div style={{fontSize:11,color:T.textSubtle,marginBottom:8}}>Activités des 6 derniers mois et à venir.</div>
     {expired.length>0&&<div style={{display:'flex',alignItems:'center',gap:8,background:`${T.danger}0d`,border:`1px solid ${T.danger}33`,borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12.5,color:T.danger}}>
       <AlertTriangle size={15}/><span>{expired.length} activité{expired.length>1?'s':''} en retard</span>
     </div>}
