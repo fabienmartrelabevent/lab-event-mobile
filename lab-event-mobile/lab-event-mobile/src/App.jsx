@@ -1298,24 +1298,35 @@ function Activites({session, onEventClick, onCompanyClick}) {
   // comptes ça tient en une seule page (évite les timeouts liés à la pagination sur
   // les comptes à plusieurs milliers d'activités). Garde-fou de pagination conservé
   // au cas où un compte très actif dépasse quand même 2000 lignes sur 6 mois.
-  const load=useCallback(async()=>{
+  // isCancelled() permet d'arrêter les appels en cours si l'utilisateur quitte l'écran
+  // avant la fin du chargement (sinon la pagination continue en arrière-plan et peut
+  // ralentir/faire échouer les requêtes d'autres écrans, ex. les devis sur Aperçu).
+  const load=useCallback(async(isCancelled=()=>false)=>{
     setLoading(true);setErr('');setTruncated(false);
     try{
       const MAX_PAGES=5;
       let all=[]; let page=1;
       while(page<=MAX_PAGES){
+        if(isCancelled()) return;
         const batch=await api(session.subdomain,session.token,'/v3/analytics/activity',{method:'POST',body:{date_from:dateJ6Mois(),page}});
+        if(isCancelled()) return;
         const arr=Array.isArray(batch)?batch:(Array.isArray(batch?.data)?batch.data:[]);
         if(arr.length===0) break;
         all=all.concat(arr);
         if(arr.length<2000) break; // dernière page atteinte
         page++;
       }
+      if(isCancelled()) return;
       if(page>MAX_PAGES) setTruncated(true);
       setItems(all);
-    }catch(e){setErr(e.message);}finally{setLoading(false);}
+    }catch(e){ if(!isCancelled()) setErr(e.message); }
+    finally{ if(!isCancelled()) setLoading(false); }
   },[session]);
-  useEffect(()=>{load();},[load]);
+  useEffect(()=>{
+    let cancelled=false;
+    load(()=>cancelled);
+    return ()=>{cancelled=true;};
+  },[load]);
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
