@@ -671,12 +671,17 @@ function Events({session, onCompanyClick, initialFilter={}}) {
   const q=search.toLowerCase();
   const _now=new Date();
   const sorted=[...(items||[])].sort((a,b)=>{
-    const da=new Date(a.events_date_from||0), db=new Date(b.events_date_from||0);
+    const hasA=!!a.events_date_from, hasB=!!b.events_date_from;
+    // Events without date → always at the bottom
+    if(!hasA&&!hasB) return (a.event_name||'').localeCompare(b.event_name||'');
+    if(!hasA) return 1;
+    if(!hasB) return -1;
+    const da=new Date(a.events_date_from), db=new Date(b.events_date_from);
     const af=da>=_now, bf=db>=_now;
-    if(af&&!bf) return -1; // future avant passé
+    if(af&&!bf) return -1; // futur avant passé
     if(!af&&bf) return 1;
-    if(af&&bf) return da-db; // futurs: le plus proche en premier
-    return db-da; // passés: le plus récent en premier
+    if(af&&bf) return da-db; // futurs : le plus proche en premier
+    return db-da; // passés : le plus récent en premier
   });
   const pipelines=[...new Set(sorted.map(e=>e.win_lost).filter(Boolean))];
   const now=new Date();
