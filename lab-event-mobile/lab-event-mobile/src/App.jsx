@@ -2521,14 +2521,31 @@ function PlanningByDay({session}) {
   const [err,setErr]=useState('');
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [truncated,setTruncated]=useState(false);
 
-  // Vue opérationnelle "jour par jour" : on part d'aujourd'hui (pas de dateJ2Ans()) pour ne pas
-  // gaspiller le budget de 2000 lignes de l'API sur 2 ans d'historique passé.
-  const todayMinusBuffer = (() => { const d=new Date(); d.setDate(d.getDate()-3); return d.toISOString().split('T')[0]; })();
-
+  // L'API /v3/analytics/events/vue-planning-by-day ne documente aucun paramètre de date :
+  // elle renvoie ses lignes triées par date croissante depuis le tout début de l'historique,
+  // plafonnées à 2000 par page. On paginate (convention page/per_page utilisée ailleurs dans
+  // cette API) jusqu'à atteindre des jours proches d'aujourd'hui, avec un garde-fou de pages.
   const load=useCallback(async()=>{
-    setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning-by-day',{method:'POST',body:{date_from:todayMinusBuffer}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    setLoading(true);setErr('');setTruncated(false);
+    try{
+      const threshold=new Date(); threshold.setDate(threshold.getDate()-3); threshold.setHours(0,0,0,0);
+      const MAX_PAGES=25;
+      let all=[]; let page=1; let reachedRecent=false; let lastBatchSize=0;
+      while(page<=MAX_PAGES){
+        const batch=await api(session.subdomain,session.token,'/v3/analytics/events/vue-planning-by-day',{method:'POST',body:{page}});
+        const arr=Array.isArray(batch)?batch:(batch?.data||[]);
+        lastBatchSize=arr.length;
+        if(arr.length===0) break;
+        all=all.concat(arr);
+        reachedRecent=arr.some(r=>r.day_date&&new Date(r.day_date)>=threshold);
+        if(reachedRecent||arr.length<2000) break; // dernière page atteinte, ou on a rejoint le présent
+        page++;
+      }
+      if(!reachedRecent&&lastBatchSize>=2000) setTruncated(true); // on a stoppé sans avoir rejoint aujourd'hui
+      setItems(all);
+    }
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2537,8 +2554,10 @@ function PlanningByDay({session}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
-  // Tri croissant : le jour le plus proche en premier (vue prospective, pas rétrospective)
-  const sorted=[...(items||[])].sort((a,b)=>new Date(a.day_date||0)-new Date(b.day_date||0));
+  const threshold=new Date(); threshold.setDate(threshold.getDate()-3); threshold.setHours(0,0,0,0);
+  // On ne garde que les jours proches d'aujourd'hui ou futurs (vue prospective, pas rétrospective)
+  const future=(items||[]).filter(r=>r.day_date&&new Date(r.day_date)>=threshold);
+  const sorted=[...future].sort((a,b)=>new Date(a.day_date||0)-new Date(b.day_date||0));
   const filtered=q?sorted.filter(r=>
     (r.event_name||'').toLowerCase().includes(q)||
     (r.room_name||r.place_name||'').toLowerCase().includes(q)||
@@ -2555,8 +2574,11 @@ function PlanningByDay({session}) {
 
   return <div style={{padding:16}}>
     <SearchBar value={search} onChange={setSearch} placeholder="Événement, salle, lieu…"/>
+    {truncated&&<div style={{background:`${T.warning}12`,border:`1.5px solid ${T.warning}66`,borderRadius:8,padding:'8px 12px',marginBottom:10,fontSize:12,color:T.warning,lineHeight:1.5}}>
+      ⚠ L'historique est trop volumineux : la limite de pages a été atteinte avant de rejoindre les jours récents. Certains jours proches d'aujourd'hui peuvent manquer — réessayer ou contacter le support si le problème persiste.
+    </div>}
     <div style={{fontSize:12,color:T.textMuted,marginBottom:12}}>{filtered.length} jour{filtered.length>1?'s':''} de planning</div>
-    {Object.keys(byDate).length===0?<Empty icon={Calendar} msg="Aucune donnée de planning."/>:
+    {Object.keys(byDate).length===0?<Empty icon={Calendar} msg="Aucune donnée de planning à venir."/>:
       <div style={{display:'flex',flexDirection:'column',gap:12}}>
         {Object.entries(byDate).map(([d,rows])=><div key={d}>
           <div style={{fontSize:12,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6,paddingLeft:4}}>{date(d)}</div>
