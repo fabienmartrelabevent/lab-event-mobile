@@ -65,6 +65,20 @@ function cacheClear(subdomain) {
     Object.keys(localStorage).filter(k=>k.startsWith(`le_cache_${subdomain}`)).forEach(k=>localStorage.removeItem(k));
   } catch {}
 }
+// Lit une entrée de cache localStorage et renvoie TOUJOURS un tableau, que la réponse API
+// d'origine soit un tableau brut ou enveloppée dans {data:[...]} (comme /v3/scheduler).
+// Les lectures directes de localStorage pour les recherches croisées (fiche événement/société/
+// contact) bypassent apiCached() et son unwrapping : sans ce helper, un appel .filter() sur un
+// objet enveloppé lève une exception silencieuse et affiche "0" partout.
+function cacheArr(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key));
+    const d = raw?.data;
+    if (Array.isArray(d)) return d;
+    if (Array.isArray(d?.data)) return d.data;
+    return [];
+  } catch { return []; }
+}
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
   let finalPath = path;
@@ -416,14 +430,14 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
   const relatedQuotes = (() => {
     try {
       const k = Object.keys(localStorage).find(k => k.includes('quotes'));
-      return k ? JSON.parse(localStorage.getItem(k)).data.filter(q => String(q.incremental_code)===code) : [];
+      return k ? cacheArr(k).filter(q => String(q.incremental_code)===code) : [];
     } catch { return []; }
   })().sort((a,b) => new Date(b.date_of_quote||0) - new Date(a.date_of_quote||0));
 
   const relatedBills = (() => {
     try {
       const k = Object.keys(localStorage).find(k => k.includes('bills'));
-      return k ? JSON.parse(localStorage.getItem(k)).data.filter(b => String(b.incremental_code)===code) : [];
+      return k ? cacheArr(k).filter(b => String(b.incremental_code)===code) : [];
     } catch { return []; }
   })().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
 
@@ -431,7 +445,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     try {
       const k = Object.keys(localStorage).find(k => k.includes('prepayments'));
       const billIds = new Set(relatedBills.map(b => String(b.bill_id||b.id)));
-      return k ? JSON.parse(localStorage.getItem(k)).data.filter(p => billIds.has(String(p.bill_id||''))) : [];
+      return k ? cacheArr(k).filter(p => billIds.has(String(p.bill_id||''))) : [];
     } catch { return []; }
   })().sort((a,b) => new Date(b.prepayment_date||0) - new Date(a.prepayment_date||0));
 
@@ -444,7 +458,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     try {
       const k = Object.keys(localStorage).find(k => k.includes('activity'));
       const evName = (event.event_name||'').toLowerCase();
-      return k ? JSON.parse(localStorage.getItem(k)).data
+      return k ? cacheArr(k)
         .filter(a => (a.event_name||'').toLowerCase()===evName)
         .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)) : [];
     } catch { return []; }
@@ -514,7 +528,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {(f.label==='Email'&&f.value&&f.value!=='null')?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
           :(f.label==='Téléphone'&&f.value&&f.value!=='null')?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
-          :f.label==='Société'?<button onClick={()=>{const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));const cos=k?JSON.parse(localStorage.getItem(k))?.data||[]:[];const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());if(co&&onCompanyClick)onCompanyClick(co);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0}}>{safeStr(f.value)}</button>
+          :f.label==='Société'?<button onClick={()=>{const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));const cos=k?cacheArr(k):[];const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());if(co&&onCompanyClick)onCompanyClick(co);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0}}>{safeStr(f.value)}</button>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
@@ -987,7 +1001,7 @@ function QuoteDetail({quote:q, session, onBack, onEventClick}) {
       {(q.event||q.event_name)&&onEventClick&&<button onClick={()=>{
         const evName=(q.event||q.event_name||'').toLowerCase();
         const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-        const ev=k?JSON.parse(localStorage.getItem(k)).data.find(e=>(e.event_name||'').toLowerCase()===evName):null;
+        const ev=k?cacheArr(k).find(e=>(e.event_name||'').toLowerCase()===evName):null;
         if(ev) onEventClick(ev);
       }} style={{width:'100%',marginTop:12,padding:'12px 16px',borderRadius:10,border:`1px solid ${T.brand}`,background:T.brandSubtle,color:T.brand,fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
         <Calendar size={15}/> Voir l'événement : {q.event||q.event_name}
@@ -1305,13 +1319,13 @@ function Activites({session, onEventClick, onCompanyClick}) {
                 {(a.event_name||a.corporation_client_name)&&<div style={{display:'flex',gap:6,marginTop:6}}>
                   {a.event_name&&onEventClick&&<button onClick={()=>{
                     const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')||k.includes('BIG')||true&&k.includes('events')&&!k.includes('vue')&&!k.includes('planning'));
-                    const evts=k?JSON.parse(localStorage.getItem(k)||'{}')?.data||[]:[];
+                    const evts=k?cacheArr(k):[];
                     const ev=evts.find(e=>e.event_name===a.event_name);
                     if(ev) onEventClick(ev); else if(a.event_link) window.open(a.event_link,'_blank');
                   }} style={{fontSize:11.5,color:T.brand,background:'none',textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir événement</button>}
                   {a.corporation_client_name&&onCompanyClick&&<button onClick={()=>{
                     const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
-                    const cos=k?JSON.parse(localStorage.getItem(k)||'{}')?.data||[]:[];
+                    const cos=k?cacheArr(k):[];
                     const co=cos.find(c=>(c.name||'').toLowerCase()===(a.corporation_client_name||'').toLowerCase());
                     if(co) onCompanyClick(co); else if(a.corporation_client_link) window.open(a.corporation_client_link,'_blank');
                   }} style={{fontSize:11.5,color:T.secondary,background:'none',textDecoration:'none',border:`1px solid ${T.secondary}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir client</button>}
@@ -1367,22 +1381,22 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
   // Load related data from cache
   const relEvents = (() => { try {
     const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue')&&!k.includes('planning'));
-    return k?JSON.parse(localStorage.getItem(k)).data.filter(e=>(e.company_name||e.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];
+    return k?cacheArr(k).filter(e=>(e.company_name||e.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];
   } catch{return [];} })();
 
   const relQuotes = (() => { try {
     const k=Object.keys(localStorage).find(k=>k.includes('quotes'));
-    return k?JSON.parse(localStorage.getItem(k)).data.filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];
+    return k?cacheArr(k).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];
   } catch{return [];} })();
 
   const relBills = (() => { try {
     const k=Object.keys(localStorage).find(k=>k.includes('bills'));
-    return k?JSON.parse(localStorage.getItem(k)).data.filter(b=>(b.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+    return k?cacheArr(k).filter(b=>(b.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
   } catch{return [];} })();
 
   const relActivities = (() => { try {
     const k=Object.keys(localStorage).find(k=>k.includes('activity'));
-    return k?JSON.parse(localStorage.getItem(k)).data.filter(a=>(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+    return k?cacheArr(k).filter(a=>(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
   } catch{return [];} })();
 
   const tabs=[
@@ -1634,7 +1648,7 @@ function CreateEventForm({session, onDone}) {
   const allCustomers = (() => {
     try {
       const k = Object.keys(localStorage).find(k => k.includes('allpages') && k.includes('customers'));
-      return k ? (JSON.parse(localStorage.getItem(k))?.data || []) : [];
+      return k ? cacheArr(k) : [];
     } catch { return []; }
   })();
   const filteredCustomers = customerSearch && !selectedCustomer
@@ -2647,9 +2661,9 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick}) {
   const coName=(c.company?.name||'').toLowerCase();
   const cName=[c.name,c.last_name].filter(Boolean).join(' ').toLowerCase();
 
-  const relEvents=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue'));return k?JSON.parse(localStorage.getItem(k)).data.filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];}catch{return [];}};
-  const relQuotes=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('quotes'));return k?JSON.parse(localStorage.getItem(k)).data.filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];}catch{return [];}};
-  const relActivities=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('activity'));return k?JSON.parse(localStorage.getItem(k)).data.filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];}catch{return [];}};
+  const relEvents=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('analytics_events')&&!k.includes('vue'));return k?cacheArr(k).filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0)):[];}catch{return [];}};
+  const relQuotes=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('quotes'));return k?cacheArr(k).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];}catch{return [];}};
+  const relActivities=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('activity'));return k?cacheArr(k).filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];}catch{return [];}};
 
   const evts=relEvents(); const quotes=relQuotes(); const acts=relActivities();
 
