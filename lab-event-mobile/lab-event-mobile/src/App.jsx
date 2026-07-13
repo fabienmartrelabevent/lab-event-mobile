@@ -2048,7 +2048,7 @@ export default function App() {
       {k:'contacts',label:'Contacts',icon:Users},
     ]},
     {section:'Commercial & Finance',items:[
-      {k:'prestataires',label:'Prestataires',icon:Briefcase},
+      {k:'prestataires',label:'Prestataires (bêta)',icon:Briefcase},
       {k:'rentabilite',label:'Rentabilité',icon:TrendingUp},
       {k:'analytics',label:'Analytics produits',icon:TrendingUp},
     ]},
