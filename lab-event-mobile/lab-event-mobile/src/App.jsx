@@ -2285,10 +2285,16 @@ function Rentabilite({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  // Filtre signé + période
+  // Uniquement les devis (document_type=1) : l'API mélange devis/factures/commandes dans le
+  // même flux, et un même événement peut avoir une ligne devis ET une ligne facture -> double
+  // comptage du CA si on ne filtre pas. Le champ booléen `signed` de l'API n'est pas fiable
+  // (retourne false même pour des documents au statut "Signé par le client"), donc on continue
+  // de détecter le statut signé via le texte de `status`.
+  const isDevis = r => Number(r.document_type)===1;
   const isSignedDoc = r => /^sign[ée]/i.test((r.status||'').trim());
   const byPeriod=applyDateFilter(items||[],'event_date',period);
-  const base=byPeriod.filter(r=>signedOnly?isSignedDoc(r):true);
+  const onlyDevis=byPeriod.filter(isDevis);
+  const base=onlyDevis.filter(r=>signedOnly?isSignedDoc(r):true);
 
   // Agréger par goods_section
   const bySection={};
@@ -2318,7 +2324,7 @@ function Rentabilite({session}) {
     </div>
     {/* Filtre signé */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
-      {[{k:true,label:'Signés uniquement'},{k:false,label:'Tous les documents'}].map(o=><button key={String(o.k)} onClick={()=>setSignedOnly(o.k)} style={{flex:1,padding:'7px 8px',borderRadius:8,border:`1.5px solid ${signedOnly===o.k?T.brand:T.border}`,background:signedOnly===o.k?T.brandTint:'none',color:signedOnly===o.k?T.brand:T.textMuted,fontSize:12,fontWeight:signedOnly===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
+      {[{k:true,label:'Devis signés uniquement'},{k:false,label:'Tous les devis'}].map(o=><button key={String(o.k)} onClick={()=>setSignedOnly(o.k)} style={{flex:1,padding:'7px 8px',borderRadius:8,border:`1.5px solid ${signedOnly===o.k?T.brand:T.border}`,background:signedOnly===o.k?T.brandTint:'none',color:signedOnly===o.k?T.brand:T.textMuted,fontSize:12,fontWeight:signedOnly===o.k?600:400,cursor:'pointer'}}>{o.label}</button>)}
     </div>
 
     {/* KPIs globaux */}
