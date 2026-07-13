@@ -458,7 +458,8 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     {k:'planning', label:'Planning'},
   ];
 
-  // Load planning from vue-planning (cache first, then API) filtered by incremental_code
+  // Recherche paginée dans vue-planning (l'API ne filtre pas fiablement par date, voir Planning
+  // salles) : on parcourt les pages et on garde uniquement les lignes de CET événement.
   useEffect(()=>{
     if(docTab!=='planning'||schedulerData!==null||schedulerLoading) return;
     setSchedulerLoading(true);setSchedulerErr('');
@@ -467,22 +468,23 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
     const filterFn=r=>
       (code&&String(r.incremental_code)===code)||
       (evName&&(r.event_name||'').toLowerCase().trim()===evName);
-    // Try cache first (vue-planning is prefetched on login)
-    const cKey=Object.keys(localStorage).find(k=>k.includes('vue_planning')&&!k.includes('by_day'));
-    if(cKey){
+    (async()=>{
       try{
-        const cached=JSON.parse(localStorage.getItem(cKey))?.data||[];
-        const filtered=cached.filter(filterFn).sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0));
-        setSchedulerData(filtered);
-        setSchedulerLoading(false);
-        return;
-      }catch{}
-    }
-    // Cache miss → fetch fresh
-    api(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans()}})
-      .then(d=>{const all=Array.isArray(d)?d:[];setSchedulerData(all.filter(filterFn).sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0)));})
-      .catch(e=>setSchedulerErr(e.message))
-      .finally(()=>setSchedulerLoading(false));
+        const MAX_PAGES=25;
+        let matches=[]; let page=1;
+        while(page<=MAX_PAGES){
+          const batch=await api(session.subdomain,session.token,'/v3/analytics/events/vue-planning',{method:'POST',body:{date_from:dateJ2Ans(),page}});
+          const arr=Array.isArray(batch)?batch:(batch?.data||[]);
+          if(arr.length===0) break;
+          const found=arr.filter(filterFn);
+          matches=matches.concat(found);
+          if(found.length>0||arr.length<2000) break; // trouvé, ou dernière page atteinte
+          page++;
+        }
+        setSchedulerData(matches.sort((a,b)=>new Date(a.start_at||0)-new Date(b.start_at||0)));
+      }catch(e){setSchedulerErr(e.message);}
+      finally{setSchedulerLoading(false);}
+    })();
   },[docTab, event, session]);
 
   if(selectedDoc?.type==='quote') return <QuoteDetail quote={selectedDoc.data} session={session} onBack={()=>setSelectedDoc(null)}/>;
