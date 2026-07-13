@@ -2363,8 +2363,10 @@ function SchedulerView({session}) {
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
     try{
-      const d=await apiCached(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{startDate:fmt(today),endDate:fmt(end)}},d=>setItems(d?.data||[]));
-      setItems(d?.data||d||[]);
+      // La réponse a la forme {resourceTimeRanges,resources,assignments,project,timeRanges,events:[...]}
+      // Les réservations utiles sont dans le tableau "events".
+      const d=await apiCached(session.subdomain,session.token,'/v3/scheduler',{method:'POST',body:{startDate:fmt(today),endDate:fmt(end)}},d=>setItems(Array.isArray(d?.events)?d.events:[]));
+      setItems(Array.isArray(d?.events)?d.events:[]);
     }catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2372,10 +2374,9 @@ function SchedulerView({session}) {
   if(loading) return <Spinner/>;
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
-  // Scheduler returns {rows:[...]} - flatten and normalize
-  const flatRaw=Array.isArray(items)?items:Array.isArray(items?.rows)?items.rows:Object.values(items||{}).flat();
+  const flatRaw=items||[];
   const q=search.toLowerCase();
-  const filtered=q?flatRaw.filter(r=>(r.event_name||r.name||r.title||'').toLowerCase().includes(q)||(r.product_real_name||r.room_name||r.room||'').toLowerCase().includes(q)):flatRaw;
+  const filtered=q?flatRaw.filter(r=>(r.eventName||r.event?.name||r.name||'').toLowerCase().includes(q)||(r.product_name||r.hall_name||'').toLowerCase().includes(q)):flatRaw;
 
   return <div style={{padding:16}}>
     <div style={{background:`${T.info}0d`,border:`1px solid ${T.info}22`,borderRadius:8,padding:'10px 12px',marginBottom:10,fontSize:12,color:T.info,lineHeight:1.5}}>
@@ -2387,20 +2388,22 @@ function SchedulerView({session}) {
     </div>
     {filtered.length===0?<Empty icon={Calendar} msg={`Aucune réservation${q?' trouvée':' sur cette période'}.`}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {filtered.map((r,i)=><Card key={i} style={{padding:14}}>
+        {filtered.map((r,i)=><Card key={r.id||i} style={{padding:14}}>
           <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
             <div style={{width:36,height:36,borderRadius:9,background:T.brandTint,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <Calendar size={16} color={T.brand}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{safeStr(r.event_name||r.name||r.title||'Réservation')}</div>
-              {(r.room_name||r.room)&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><MapPin size={11}/>{safeStr(r.room_name||r.room)}</div>}
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8}}>
-                {r.start_at&&<span><Clock size={11}/> {date(r.start_at)}</span>}
-                {r.end_at&&<span>→ {date(r.end_at)}</span>}
+              <div style={{fontSize:13.5,fontWeight:600,color:T.ink}}>{safeStr(r.eventName||r.event?.name||r.name||'Réservation')}</div>
+              {(r.product_name||r.hall_name)&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><MapPin size={11}/>{safeStr(r.product_name||r.hall_name)}</div>}
+              {r.client?.company&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1}}>{safeStr(r.client.company)}</div>}
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+                {r.date_from&&<span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{date(r.date_from)}</span>}
+                {(r.time_from||r.time_to)&&<span>{r.time_from||''}{r.time_to?` → ${r.time_to}`:''}</span>}
+                {r.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{r.number_of_persons}</span>:null}
               </div>
             </div>
-            {(r.status||r.status_name)&&<Badge label={safeStr(r.status||r.status_name)} color={T.brand}/>}
+            {r.status?.name&&<Badge label={safeStr(r.status.name)} color={r.status.color||T.brand}/>}
           </div>
         </Card>)}
       </div>}
