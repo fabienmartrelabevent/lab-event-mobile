@@ -362,7 +362,7 @@ function EventRow({event,onClick}) {
       <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.event_name||'Événement sans nom'}</div>
       {(event.company_name||event.customer)&&<div style={{fontSize:12,color:T.brand,fontWeight:500,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{event.company_name||event.customer}</div>}
       <div style={{fontSize:12,color:T.textMuted,marginTop:2,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-        <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{date(event.events_date_from)}</span>
+        <span style={{display:'flex',alignItems:'center',gap:3}}><Clock size={11}/>{date(event.events_date_from)}{event.events_date_to&&date(event.events_date_to)!==date(event.events_date_from)?` → ${date(event.events_date_to)}`:''}</span>
         {event.number_of_persons?<span style={{display:'flex',alignItems:'center',gap:3}}><Users size={11}/>{event.number_of_persons}</span>:null}
         {event.quotes_sell_price_sign?<span style={{color:T.success,fontWeight:600}}>{money(event.quotes_sell_price_sign)}</span>:null}
         {wl?<Badge label={wl} color={wlColor}/>:null}
