@@ -1934,7 +1934,6 @@ export default function App() {
     ]},
     {section:'Planning',items:[
       {k:'planning',label:'Planning salles',icon:Calendar},
-      {k:'scheduler',label:'Réservations',icon:MapPin},
       {k:'planningbyday',label:'Planning par jour',icon:Calendar},
     ]},
     {section:'Catalogue',items:[
@@ -2010,7 +2009,6 @@ export default function App() {
       {tab==='prestataires'&&<Prestataires session={session}/>}
       {tab==='rentabilite'&&<Rentabilite session={session}/>}
       {tab==='analytics'&&<AnalyticsLight session={session}/>}
-      {tab==='scheduler'&&<SchedulerView session={session}/>}
       {tab==='articles'&&<Articles session={session}/>}
       {tab==='planningbyday'&&<PlanningByDay session={session}/>}
       {tab==='support'&&<Support onBack={()=>setTab('dashboard')}/>}
