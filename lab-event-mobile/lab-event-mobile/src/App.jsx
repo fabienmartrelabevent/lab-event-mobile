@@ -1371,7 +1371,7 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
         {[
           {label:'Ville', value:co.city||co.address?.city},
           {label:'Code postal', value:co.address?.zipcode},
-          {label:'Pays', value:co.country||co.address?.country?.replace('country.','')},
+          {label:'Pays', value:formatCountry(co.country||co.address?.country)},
           {label:'Adresse', value:co.address?.street_1},
           {label:'Site web', value:co.web_site},
           {label:'SIRET', value:co.finance?.siret||co.data?.nb_siret},
@@ -2034,24 +2034,28 @@ export default function App() {
 // ─── Prestataires ─────────────────────────────────────────────────
 
 // ─── PartnerDetail ────────────────────────────────────────────────
+const formatCountry = c => c ? String(c).replace('country.','') : '';
 function PartnerDetail({partner, session, onBack}) {
   const [details, setDetails] = useState(null);
+  const partnerId = partner.id || partner.company_id || partner.corporation_id;
   useEffect(()=>{
-    if(!partner.id) return;
-    api(session.subdomain, session.token, `/v3/customer-company/${partner.id}`)
+    if(!partnerId) return;
+    api(session.subdomain, session.token, `/v3/customer-company/${partnerId}`)
       .then(d=>setDetails(d?.data||d||null)).catch(()=>{});
-  },[partner.id, session]);
-  const p = details || partner;
+  },[partnerId, session]);
+  const p = {...partner, ...details}; // fusion : ne perd jamais les données déjà connues (analytics)
 
   const fields = [
     {label:'Type', value:p.type_name||p.company_type},
     {label:'Ville', value:p.city||(p.address?.city)},
-    {label:'Pays', value:p.country||(p.address?.country?.replace('country.',''))},
+    {label:'Pays', value:formatCountry(p.country||p.address?.country)},
     {label:'Adresse', value:p.address?.street_1},
+    {label:'Code postal', value:p.address?.zipcode},
     {label:'Site web', value:p.web_site},
     {label:'Email', value:p.finance?.contact?.email, link:`mailto:${p.finance?.contact?.email}`},
     {label:'Téléphone', value:p.finance?.contact?.phone, link:`tel:${p.finance?.contact?.phone}`},
-    {label:'SIRET', value:p.finance?.siret},
+    {label:'SIRET', value:p.finance?.siret||p.data?.nb_siret},
+    {label:'N° TVA', value:p.finance?.tva_number||p.data?.tva_number},
     {label:'Langue', value:p.company_language},
   ].filter(f=>f.value&&f.value!=='null'&&safeStr(f.value));
 
