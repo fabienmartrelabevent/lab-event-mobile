@@ -2522,9 +2522,13 @@ function PlanningByDay({session}) {
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
 
+  // Vue opérationnelle "jour par jour" : on part d'aujourd'hui (pas de dateJ2Ans()) pour ne pas
+  // gaspiller le budget de 2000 lignes de l'API sur 2 ans d'historique passé.
+  const todayMinusBuffer = (() => { const d=new Date(); d.setDate(d.getDate()-3); return d.toISOString().split('T')[0]; })();
+
   const load=useCallback(async()=>{
     setLoading(true);setErr('');
-    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning-by-day',{method:'POST',body:{date_from:dateJ2Ans()}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
+    try{const d=await apiCached(session.subdomain,session.token,'/v3/analytics/events/vue-planning-by-day',{method:'POST',body:{date_from:todayMinusBuffer}},d=>setItems(Array.isArray(d)?d:[]));setItems(Array.isArray(d)?d:[]);}
     catch(e){setErr(e.message);}finally{setLoading(false);}
   },[session]);
   useEffect(()=>{load();},[load]);
@@ -2533,7 +2537,8 @@ function PlanningByDay({session}) {
   if(err) return <ErrBanner msg={err} onRetry={load}/>;
 
   const q=search.toLowerCase();
-  const sorted=[...(items||[])].sort((a,b)=>new Date(b.day_date||0)-new Date(a.day_date||0));
+  // Tri croissant : le jour le plus proche en premier (vue prospective, pas rétrospective)
+  const sorted=[...(items||[])].sort((a,b)=>new Date(a.day_date||0)-new Date(b.day_date||0));
   const filtered=q?sorted.filter(r=>
     (r.event_name||'').toLowerCase().includes(q)||
     (r.room_name||r.place_name||'').toLowerCase().includes(q)||
