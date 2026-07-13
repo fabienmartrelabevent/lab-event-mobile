@@ -2843,8 +2843,8 @@ const SUPPORT_CONTENT = [
     items: [
       { label: 'À venir', desc: 'Nombre d\'événements dont la date de début est dans le futur (données sur 2 ans).' },
       { label: 'Devis en cours', desc: 'Devis actifs : ni signés, ni annulés, ni rejetés. Tous les devis "vivants".' },
-      { label: 'CA signé total', desc: 'Somme TTC des devis signés par le client, sur tous les événements des 2 dernières années.' },
-      { label: 'CA ce mois', desc: 'CA TTC des devis signés dont la date d\'émission est dans les 30 derniers jours.' },
+      { label: 'CA HT 12 derniers mois', desc: 'Somme HT des devis signés dont la date de l\'événement tombe dans les 12 derniers mois glissants. Clic → ouvre la liste de ces devis.' },
+      { label: 'CA HT signé ce mois', desc: 'Somme HT des devis signés dont la date d\'émission du devis est dans le mois calendaire en cours.' },
       { label: 'Pipeline En cours / Gagnés / Perdus', desc: 'Comptage des événements par résultat commercial (champ "win_lost" de chaque événement).' },
       { label: 'Prochains événements', desc: 'Les 5 prochains événements futurs, triés par date de début.' },
     ]
@@ -2856,6 +2856,7 @@ const SUPPORT_CONTENT = [
       { label: 'Liste', desc: 'Tous les événements des 2 dernières années, triés du plus récent au plus ancien.' },
       { label: 'Filtres pipeline', desc: 'Filtrer par résultat : Tous / En Cours / Gagné / Perdu.' },
       { label: 'Filtres date', desc: 'Fenêtres glissantes : 30j / 90j / 6 mois / 1 an / 2 ans à partir d\'aujourd\'hui.' },
+      { label: 'Dates de début et de fin', desc: 'Si un événement dure plusieurs jours, la date de fin est affichée à côté de la date de début.' },
       { label: 'Fiche événement', desc: 'CA signé, CA total, marge. Onglets : Devis, Factures, Paiements, Activités, Planning (réservations de salles).' },
       { label: 'Société cliquable', desc: 'Cliquer sur le nom de la société ouvre la fiche société.' },
     ]
@@ -2866,6 +2867,7 @@ const SUPPORT_CONTENT = [
     items: [
       { label: 'Devis / Factures / Paiements', desc: 'Données des 2 dernières années par défaut. Filtres par fenêtre glissante (30j, 90j, 6m, 1an, 2ans).' },
       { label: 'Clé de tri', desc: 'Devis triés par date d\'émission. Factures par date de facture. Paiements par date de virement.' },
+      { label: 'Client et Événement cliquables', desc: 'Dans le détail d\'un devis ou d\'une facture, cliquer sur le nom du client ou de l\'événement ouvre directement sa fiche.' },
       { label: 'Lignes de devis/facture', desc: 'Les articles proviennent de vue-analytics-light. Ils apparaissent 2-3 secondes après ouverture (chargement à la demande).' },
       { label: 'TVA', desc: 'Affichée sous forme "10% : 87 € · 20% : 47 €" (taux : montant HT).' },
     ]
@@ -2874,9 +2876,18 @@ const SUPPORT_CONTENT = [
     section: 'Activités',
     icon: '✅',
     items: [
-      { label: 'Filtres', desc: 'Toutes / En retard (deadline_is_expired) / Bientôt (deadline_is_soon_expired mais pas encore expiré).' },
+      { label: 'Filtres', desc: 'Toutes / En retard / Bientôt (échéance dans les 30 prochains jours).' },
       { label: 'Voir événement / Voir client', desc: 'Navigue directement vers la fiche événement ou société dans l\'app.' },
-      { label: 'Données', desc: 'Activités sur 2 ans, triées par date décroissante.' },
+      { label: 'Données', desc: 'Activités des 6 derniers mois et à venir (pas 2 ans, pour rester rapide même sur les comptes avec beaucoup d\'activités), classées par urgence.' },
+    ]
+  },
+  {
+    section: 'Planning',
+    icon: '🏨',
+    items: [
+      { label: 'Planning salles', desc: 'Réservations de salles récentes et à venir, une ligne par réservation (date de début → date de fin).' },
+      { label: 'Planning par jour', desc: 'Mêmes données mais éclatées en une ligne par jour occupé — pratique pour voir jour par jour ce qui se passe.' },
+      { label: 'Nom de la salle', desc: 'Affiché dans un badge de couleur au-dessus de chaque réservation.' },
     ]
   },
   {
@@ -2885,26 +2896,36 @@ const SUPPORT_CONTENT = [
     items: [
       { label: 'Sociétés', desc: 'Toutes les sociétés clientes. Cliquer ouvre la fiche avec contacts liés, événements, devis, factures, activités.' },
       { label: 'Contacts', desc: 'Tous les contacts. Cliquer ouvre la fiche avec ses activités, événements, devis.' },
+      { label: 'Tout est cliquable', desc: 'Dans une fiche société ou contact, chaque élément des sous-onglets (contact, événement, devis, facture) t\'emmène directement vers sa fiche détaillée.' },
       { label: 'Recherche', desc: 'Filtre en temps réel sur le nom, la ville (sociétés) ou le nom, email, poste (contacts).' },
       { label: 'Données fraîches', desc: 'Sociétés et contacts sont chargés en pagination complète (toutes les pages).' },
     ]
   },
   {
-    section: 'Rentabilité',
+    section: 'Prestataires (bêta)',
+    icon: '🤝',
+    items: [
+      { label: 'Données', desc: 'Sociétés partenaires (fournisseurs, prestataires). Moins de champs disponibles que pour les clients selon les comptes — c\'est une limite de l\'API, pas un bug.' },
+      { label: 'Fiche détail', desc: 'Coordonnées si disponibles, plus les montants HT et TTC des devis et factures signés avec ce prestataire.' },
+    ]
+  },
+  {
+    section: 'Rentabilité (bêta)',
     icon: '📈',
     items: [
-      { label: 'Données', desc: 'Agrégation de toutes les lignes de devis/factures par section (Hébergement, Restauration, Animation…).' },
-      { label: 'Filtre Signés uniquement', desc: 'Filtre sur les statuts commençant par "Signé" (Signé par le client, Signé électroniquement…).' },
-      { label: 'Filtre période', desc: 'Fenêtres glissantes : 30j / 90j / 6m / 1an / 2ans sur la date de l\'événement.' },
+      { label: 'Données', desc: 'Agrégation des lignes de DEVIS uniquement (les factures ne sont pas comptées, pour éviter de compter deux fois le même CA), par section (Hébergement, Restauration, Animation…).' },
+      { label: 'Filtre Devis signés uniquement', desc: 'Filtre sur les statuts commençant par "Signé" (Signé par le client, Signé électroniquement…).' },
+      { label: 'Filtre période', desc: '"Cette année" = depuis le 1er janvier. "12 mois" = les 365 derniers jours glissants. Bien distincts, à ne pas confondre.' },
       { label: 'Taux de marge', desc: 'Marge / CA vendu × 100. Vert ≥ 30%, Orange ≥ 15%, Rouge < 15%.' },
     ]
   },
   {
-    section: 'Analytics produits',
+    section: 'Analytics produits (bêta)',
     icon: '🛍️',
     items: [
       { label: 'Données', desc: 'Agrégation des lignes de devis/factures par article (good_name). Total CA = somme de tous les sell_price.' },
       { label: 'Filtre section', desc: 'Liste déroulante pour filtrer par section (product_name).' },
+      { label: 'Filtre période', desc: '"Cette année" = depuis le 1er janvier. "12 mois" = les 365 derniers jours glissants.' },
       { label: 'Tri', desc: 'Par CA décroissant ou par volume (nombre de fois vendu).' },
       { label: '× vendu', desc: 'Nombre d\'occurrences de l\'article dans les documents de la période.' },
     ]
@@ -2915,6 +2936,7 @@ const SUPPORT_CONTENT = [
     items: [
       { label: 'Rafraîchissement', desc: 'Données affichées instantanément depuis le cache. Rafraîchissement silencieux en arrière-plan après 30 min. Forçage du re-fetch après 2h.' },
       { label: 'Prefetch au login', desc: 'Toutes les sections sont chargées en arrière-plan dès la connexion pour une navigation fluide.' },
+      { label: 'Gros comptes', desc: 'Si tu as beaucoup de données (planning, activités...), l\'app charge plusieurs pages automatiquement. Un message d\'avertissement apparaît si la limite est atteinte sans avoir tout récupéré.' },
       { label: 'Factures/devis récents', desc: 'Si un document vient d\'être créé dans Lab-event, patienter 2h maximum ou recharger la page pour qu\'il apparaisse.' },
     ]
   },
@@ -2942,7 +2964,7 @@ function Support({onBack}) {
       items:[
         {q:'À venir — c\'est quoi ?', a:'C\'est le nombre de tes événements qui ont une date DANS LE FUTUR (à partir d\'aujourd\'hui). Si tu cliques dessus, tu vois la liste de ces événements. Exemple : tu as 13 événements planifiés dans les semaines/mois qui viennent.'},
         {q:'Devis en cours — c\'est quoi ?', a:'C\'est le nombre de devis que tu as envoyés et qui sont ni signés, ni annulés, ni refusés. En gros : les propositions qui "attendent" une réponse de tes clients. Si tu cliques, tu vois ces devis.'},
-        {q:'CA HT signé 12 mois — comment c\'est calculé ?', a:'C\'est la somme (en euros HT) de tous les devis que tes clients ont signés et dont l\'événement tombe dans les 12 derniers mois. ⚠️ Attention : on utilise la date de l\'événement, pas la date à laquelle le client a signé — parce que Lab-event ne donne pas cette info directement.'},
+        {q:'CA HT 12 derniers mois — comment c\'est calculé ?', a:'C\'est la somme (en euros HT) de tous les devis que tes clients ont signés et dont l\'événement tombe dans les 12 derniers mois. ⚠️ Attention : on utilise la date de l\'événement, pas la date à laquelle le client a signé — parce que Lab-event ne donne pas cette info directement.\n\nSi tu cliques dessus, tu arrives sur la liste des devis signés qui correspondent exactement à ce calcul.'},
         {q:'CA HT signé ce mois — comment c\'est calculé ?', a:'C\'est la somme (en euros HT) des devis signés ce mois-ci. On utilise la date du devis comme référence (pas la date de signature exacte — voir point précédent). Si tu cliques, tu vois ces devis.'},
         {q:'Prochains événements — pourquoi je n\'en vois que 5 ?', a:'Pour garder l\'écran clair et rapide, on affiche les 5 prochains événements. Si tu en as plus (ex: 13), tu verras un bouton "Voir les 13 →" qui t\'emmène vers la liste complète. Le chiffre sur la card "À venir" indique TOUJOURS le vrai total.'},
         {q:'En cours / Gagnés / Perdus — c\'est quoi ?', a:'Ce sont les compteurs de ton pipeline. "Gagnés" et "Perdus" sont définis manuellement dans Lab-event sur chaque fiche événement. "En cours" = tous les événements qui n\'ont pas encore de résultat final.'},
@@ -2955,6 +2977,7 @@ function Support({onBack}) {
         {q:'C\'est quoi les filtres en haut ?', a:'Les filtres de date (30j, 90j, 6 mois, 1 an, 2 ans) montrent les événements dont la DATE DE DÉBUT tombe dans cette fenêtre glissante.\n\nLes filtres pipeline (Tous, En cours, Gagné, Perdu) filtrent selon le résultat de l\'événement.'},
         {q:'Qu\'est-ce que je vois dans le détail d\'un événement ?', a:'- Les informations générales (dates, client, commercial...)\n- Les Devis liés à cet événement\n- Les Factures liées\n- Les Paiements reçus\n- Les Activités (tâches, rappels...)\n- Le Planning des salles réservées\n\nTout ça est automatiquement filtré pour ne montrer que ce qui concerne CET événement.'},
         {q:'Pourquoi le CA HT de l\'événement est différent du total du devis (TTC) ?', a:'Normal ! Le CA de l\'événement est en HT (sans TVA). Le montant du devis en TTC inclut la TVA. Exemple : CA HT 31 900 € × 1,20 (TVA 20%) = 38 280 € TTC. Les deux chiffres sont corrects, ils mesurent la même chose différemment.'},
+        {q:'Pourquoi je vois parfois deux dates sur un événement ?', a:'Quand un événement dure plusieurs jours, la liste affiche la date de début ET la date de fin (ex: "12 juil. 2026 → 14 juil. 2026"). Si l\'événement dure une seule journée, une seule date est affichée pour ne pas surcharger.'},
       ]
     },
     {
@@ -2965,32 +2988,45 @@ function Support({onBack}) {
         {q:'Paiements — qu\'est-ce que je vois ?', a:'Ici tu vois les acomptes et règlements que tes clients ont versés. Ces montants sont en TTC (avec TVA), parce que c\'est ce que le client a réellement payé. Tu vois aussi le "reste à percevoir" = ce qu\'il reste à encaisser.'},
         {q:'Pourquoi les montants HT et TTC sont différents ?', a:'La TVA ! En France, la TVA standard est à 20%. Donc :\n- 1 000 € HT + 20% TVA = 1 200 € TTC\nLe client paie 1 200 €, mais ton CA est de 1 000 € (tu reverses 200 € à l\'État).'},
         {q:'C\'est quoi les lignes dans le détail d\'un devis ?', a:'Ce sont les articles et prestations qui composent le devis : hébergement, restauration, animation, etc. Chaque ligne a un nom, une section (catégorie) et un montant. Ces informations viennent directement de Lab-event.'},
+        {q:'Le nom du client ou de l\'événement est cliquable, à quoi ça sert ?', a:'Dans le détail d\'un devis ou d\'une facture, cliquer sur "Client" t\'emmène directement à la fiche société correspondante, et cliquer sur "Événement" t\'emmène à la fiche événement. Pratique pour naviguer sans avoir à rechercher.'},
       ]
     },
     {
-      id:'rentabilite', title:'Écran Rentabilité', icon:'📈',
+      id:'rentabilite', title:'Écran Rentabilité (bêta)', icon:'📈',
       items:[
+        {q:'Pourquoi "bêta" ?', a:'Cet écran est encore en cours d\'amélioration : les données de rentabilité remontées par Lab-event mélangent devis, factures et commandes, et on continue d\'affiner les calculs. Les chiffres sont fiables sur les devis signés, mais recoupe avec Lab-event si un chiffre te semble bizarre.'},
         {q:'À quoi ça sert ?', a:'La rentabilité, ça répond à la question : "Sur quels types de prestations je gagne le plus d\'argent ?" Tu vois par exemple que tu as 51% de marge sur la Restauration mais 92% sur la Privatisation. Ça t\'aide à savoir où concentrer tes efforts.'},
-        {q:'"Signés uniquement" vs "Tous les documents" — quelle différence ?', a:'"Signés uniquement" = seulement les devis que tes clients ont acceptés. C\'est TON VRAI CA, ce que tu as vraiment vendu.\n\n"Tous les documents" inclut aussi les devis en attente, brouillons, proformas. C\'est le CA POTENTIEL si tout se concrétise. Commence par "Signés uniquement" pour voir la réalité.'},
+        {q:'Pourquoi seulement les devis, pas les factures ?', a:'Un même événement a souvent un devis ET la facture qui en découle. Si on comptait les deux, le CA et la marge seraient comptés deux fois. On ne garde donc que les devis, qui représentent la vente engagée.'},
+        {q:'"Devis signés uniquement" vs "Tous les devis" — quelle différence ?', a:'"Devis signés uniquement" = seulement les devis que tes clients ont acceptés. C\'est TON VRAI CA, ce que tu as vraiment vendu.\n\n"Tous les devis" inclut aussi les devis en attente, brouillons, proformas. C\'est le CA POTENTIEL si tout se concrétise. Commence par "Devis signés uniquement" pour voir la réalité.'},
+        {q:'"Cette année" vs "12 mois" — quelle différence ?', a:'"Cette année" = depuis le 1er janvier de l\'année en cours (un vrai calendrier).\n\n"12 mois" = les 365 derniers jours à partir d\'aujourd\'hui, peu importe le mois. En janvier par exemple, "Cette année" ne montrera presque rien alors que "12 mois" montrera une année pleine.'},
         {q:'Le taux de marge — comment le lire ?', a:'C\'est le % de ce que tu gardes. 40% de marge = sur 100 € que tu factures, 40 € restent dans ta poche (après avoir payé tes prestataires).\n\nCode couleur :\n🟢 ≥ 30% = bonne marge\n🟠 Entre 15% et 30% = à surveiller\n🔴 < 15% = marge faible, attention'},
         {q:'Pourquoi certaines sections s\'appellent "N/A" ?', a:'"N/A" = les lignes de devis sans catégorie de prestation renseignée dans Lab-event. Pour avoir des données plus propres, il faut s\'assurer que chaque ligne de devis a bien une section (Hébergement, Restauration...) dans Lab-event.'},
       ]
     },
     {
-      id:'analytics', title:'Analytics produits', icon:'🏷️',
+      id:'analytics', title:'Analytics produits (bêta)', icon:'🏷️',
       items:[
         {q:'À quoi ça sert ?', a:'C\'est pour savoir quels sont tes produits/services les plus vendus. Par exemple : "Location salon" apparaît 162 fois pour 5,9M€ de CA. Ça t\'aide à identifier tes best-sellers et à comprendre ce que tes clients achètent le plus.'},
         {q:'CA — c\'est le chiffre de toute la période ?', a:'Oui ! Le CA d\'un article, c\'est la somme de toutes ses occurrences sur la période choisie. Si "Cocktails" apparaît dans 50 devis à 200€ chaque fois, le CA affiché est 10 000 €.'},
         {q:'× vendus — c\'est quoi exactement ?', a:'C\'est le nombre de fois où cet article apparaît dans un devis ou une facture. Ce n\'est pas le nombre d\'unités vendues, c\'est le nombre de documents qui contiennent cet article.'},
         {q:'PU moyen — c\'est quoi ?', a:'PU = Prix Unitaire. C\'est le prix moyen de cet article calculé sur toutes ses ventes. Utile pour vérifier si tes prix sont cohérents et si tu vends toujours au même tarif.'},
+        {q:'"Cette année" vs "12 mois" — quelle différence ?', a:'"Cette année" = depuis le 1er janvier de l\'année en cours. "12 mois" = les 365 derniers jours glissants à partir d\'aujourd\'hui. Deux fenêtres différentes, à ne pas confondre.'},
       ]
     },
     {
       id:'contacts', title:'Clients & Contacts', icon:'👥',
       items:[
         {q:'Quelle différence entre Société et Contact ?', a:'Une Société, c\'est l\'entreprise (ex: "ADEZ", "Decathlon"). Un Contact, c\'est une personne physique dans cette entreprise (ex: "Marine Sahnoune, Directrice commerciale"). Une société peut avoir plusieurs contacts.'},
-        {q:'Qu\'est-ce que je vois dans la fiche d\'une société ?', a:'- Ses contacts (personnes)\n- Ses événements passés et futurs\n- Ses devis et factures\n- Ses activités (tâches en cours)\n\nTout ça te permet de voir en un coup d\'œil tout l\'historique avec ce client.'},
+        {q:'Qu\'est-ce que je vois dans la fiche d\'une société ?', a:'- Ses contacts (personnes)\n- Ses événements passés et futurs\n- Ses devis et factures\n- Ses activités (tâches en cours)\n\nTout ça te permet de voir en un coup d\'œil tout l\'historique avec ce client. Et chaque élément est cliquable : un contact t\'emmène à sa fiche, un événement à sa fiche événement, un devis ou une facture à son détail.'},
         {q:'Je peux appeler ou écrire directement depuis l\'app ?', a:'Oui ! Si l\'email ou le téléphone d\'un contact est renseigné, il apparaît en bleu cliquable. Appuie dessus pour appeler ou envoyer un email directement.'},
+      ]
+    },
+    {
+      id:'prestataires', title:'Prestataires (bêta)', icon:'🤝',
+      items:[
+        {q:'C\'est quoi un Prestataire ?', a:'Un prestataire, c\'est une société avec qui tu travailles pour organiser tes événements (traiteur, DJ, lieu, décorateur...) — à l\'inverse d\'un client, c\'est plutôt quelqu\'un à qui TU payes des choses.'},
+        {q:'Pourquoi "bêta" ?', a:'L\'API de Lab-event donne moins d\'informations sur les prestataires que sur les clients (pas toujours d\'email ou de téléphone selon les comptes). La fiche reste donc parfois incomplète — ce n\'est pas un bug, c\'est une limite des données disponibles.'},
+        {q:'Qu\'est-ce que je vois dans la fiche d\'un prestataire ?', a:'Les infos générales (ville, adresse, SIRET, TVA...) quand elles sont disponibles, et les montants de devis/factures signés avec ce prestataire (HT et TTC).'},
       ]
     },
     {
@@ -3000,12 +3036,15 @@ function Support({onBack}) {
         {q:'C\'est quoi "En retard" ?', a:'Une activité "En retard" = son échéance est passée et elle n\'a pas été faite. C\'est urgent ! Par exemple : "Faire la facture - échéance 01 juil. 2026" et on est le 5 juillet → c\'est en retard.'},
         {q:'C\'est quoi "Bientôt" ?', a:'"Bientôt" = l\'échéance arrive dans les prochains jours. Ce ne sont PAS des activités en retard, juste des activités à faire rapidement pour éviter qu\'elles deviennent en retard.'},
         {q:'Je peux naviguer vers l\'événement depuis une activité ?', a:'Oui ! Sur chaque activité, tu as des boutons "Voir événement" et "Voir client" qui t\'emmènent directement vers la fiche correspondante dans l\'app.'},
+        {q:'Pourquoi je ne vois que les 6 derniers mois ?', a:'Sur les comptes avec beaucoup d\'activités (plusieurs milliers), charger 2 ans d\'un coup pouvait ralentir l\'app, voire bloquer. On a réduit à 6 mois passés + toutes les activités à venir, ce qui couvre largement ce qui est encore utile au quotidien.'},
       ]
     },
     {
       id:'planning', title:'Planning & Salles', icon:'🏨',
       items:[
-        {q:'Planning salles — c\'est quoi ?', a:'C\'est la liste de toutes les réservations de salles sur les 2 dernières années. Tu vois quelle salle est réservée pour quel événement, à quelles heures.'},
+        {q:'Planning salles — c\'est quoi ?', a:'C\'est la liste des réservations de salles récentes et à venir (on ne remonte pas dans les années passées, pour rester concentré sur ce qui compte). Une ligne = une réservation, avec la salle, la date de début et de fin.'},
+        {q:'Planning par jour — quelle différence avec Planning salles ?', a:'Planning par jour éclate chaque réservation en une ligne PAR JOUR : un événement de 3 jours donne 3 lignes, une par jour. Planning salles, lui, garde une seule ligne par réservation avec une date de début et une date de fin différentes.'},
+        {q:'Pourquoi je ne vois pas le nom de la salle ?', a:'Le nom de la salle est affiché dans un badge de couleur au-dessus des informations de chaque réservation. Si tu ne le vois pas, c\'est que Lab-event n\'a pas renseigné de salle pour cette réservation.'},
         {q:'Planning dans une fiche événement — c\'est différent ?', a:'Oui ! Dans le détail d\'un événement, l\'onglet Planning montre UNIQUEMENT les salles réservées pour CET événement spécifique. C\'est beaucoup plus ciblé.'},
       ]
     },
@@ -3027,7 +3066,8 @@ function Support({onBack}) {
       items:[
         {q:'Les données sont-elles en temps réel ?', a:'Presque ! L\'app garde une copie locale de tes données pour être rapide. Elles se mettent à jour automatiquement toutes les 30 minutes en arrière-plan. Après 2 heures sans activité, un rechargement complet se fait automatiquement.'},
         {q:'J\'ai créé un événement dans Lab-event, pourquoi il n\'apparaît pas ?', a:'Il apparaîtra au prochain rafraîchissement automatique (maximum 2 heures). Si tu veux voir tes données immédiatement, déconnecte-toi et reconnecte-toi — ça force un rechargement complet.'},
-        {q:'L\'app couvre quelle période ?', a:'Par défaut, toutes les sections montrent les 2 dernières années. Tu peux réduire la fenêtre avec les filtres (30j, 90j, 6 mois, 1 an). Mais tu ne peux pas voir au-delà de 2 ans dans l\'app mobile — utilise Lab-event pour ça.'},
+        {q:'L\'app couvre quelle période ?', a:'Par défaut, toutes les sections montrent les 2 dernières années (sauf les Activités, limitées à 6 mois passés + à venir pour rester rapides). Tu peux réduire la fenêtre avec les filtres (30j, 90j, 6 mois, 1 an). Mais tu ne peux pas voir au-delà de 2 ans dans l\'app mobile — utilise Lab-event pour ça.'},
+        {q:'Pourquoi un écran met du temps à charger sur un gros compte ?', a:'Sur les comptes avec beaucoup de données (planning, activités...), l\'app va chercher plusieurs pages de données automatiquement. Si la limite est atteinte avant d\'avoir tout récupéré, un message d\'avertissement s\'affiche pour te prévenir que certaines données peuvent manquer.'},
         {q:'Je ne trouve pas ce que je cherche dans l\'app ?', a:'L\'app mobile est conçue pour les consultations rapides et les actions simples (créer un événement, voir un devis, appeler un client). Pour tout ce qui est édition complexe, configuration, ou données historiques, utilise directement Lab-event sur ton navigateur.'},
       ]
     },
