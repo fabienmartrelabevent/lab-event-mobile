@@ -1049,8 +1049,9 @@ function Quotes({session, onDetailChange=()=>{}, initialFilter={}}) {
         {filtered.map((item,i)=><Card key={item.quote_id||i} onClick={()=>setSelected(item)} style={{padding:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}}>
             <div style={{minWidth:0,flex:1}}>
-              <div style={{fontSize:13.5,fontWeight:600,color:T.ink,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.title||item.event||'Devis'}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{item.nb} · {date(item.date_of_quote)}</div>
+              {item.nb&&<div style={{fontSize:14,fontWeight:700,color:T.brandStrong,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.nb}</div>}
+              <div style={{fontSize:13,fontWeight:600,color:T.ink,marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{item.title||item.event||'Devis'}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Émis le {date(item.date_of_quote)}</div>
               {item.customer&&<div style={{fontSize:12,color:T.textMuted}}>{item.customer}</div>}
             </div>
             <div style={{textAlign:'right',flexShrink:0,display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
