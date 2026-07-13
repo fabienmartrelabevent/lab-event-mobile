@@ -611,7 +611,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
         :(!schedulerData||schedulerData.length===0)?<Empty icon={Calendar} msg="Aucune réservation de salle trouvée pour cet événement."/>
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
           {schedulerData.map((r,i)=>{
-            const room=r.product_real_name||(r.name&&r.name.trim())||'Salle sans nom';
+            const room=r.room_name||r.product_real_name||(r.name&&r.name.trim())||'Salle sans nom';
             const hasAssembly=r.assembly_client_enabled||r.assembly_intern_enabled;
             const hasDisassembly=r.disassembly_client_enabled||r.disassembly_intern_enabled;
             return <Card key={i} style={{padding:14}}>
