@@ -585,7 +585,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
         :<div style={{display:'flex',flexDirection:'column',gap:8}}>
           {relatedActivities.map((a,i)=><Card key={i} style={{padding:12}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-              <div style={{width:8,height:8,borderRadius:'50%',background:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.success,marginTop:5,flexShrink:0}}/>
+              <div style={{width:8,height:8,borderRadius:'50%',background:(()=>{const t=new Date();t.setHours(0,0,0,0);const s=new Date(t);s.setDate(s.getDate()+30);const exp=!!a.deadline&&new Date(a.deadline)<t;const son=!!a.deadline&&new Date(a.deadline)>=t&&new Date(a.deadline)<=s;return exp?T.danger:son?T.warning:T.success;})(),marginTop:5,flexShrink:0}}/>
               <div style={{flex:1}}>
                 <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
                   <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
@@ -595,7 +595,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,120)}{strip(a.comment).length>120?'…':''}</div>}
                 <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8,flexWrap:'wrap'}}>
                   {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
-                  {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.textSubtle}}>{a.deadline_is_expired?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
+                  {a.deadline&&<span style={{color:(()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})() ?T.danger:T.textSubtle}}>{ (()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})()?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
                 </div>
               </div>
             </div>
@@ -1218,19 +1218,24 @@ function Activites({session, onEventClick, onCompanyClick}) {
 
   const allRaw=items||[];
   const all=allRaw; // No date filter in activities (use all data, filter by deadline status)
-  const expired=all.filter(a=>!!a.deadline_is_expired);
-  const soon=all.filter(a=>!!a.deadline_is_soon_expired&&!a.deadline_is_expired);
+  // ─── Calcul temps réel des échéances (ne pas se fier aux champs API qui sont périmés)
+  const _today=new Date(); _today.setHours(0,0,0,0);
+  const _soon30=new Date(_today); _soon30.setDate(_soon30.getDate()+30);
+  const isExp=a=>!!a.deadline&&new Date(a.deadline)<_today;
+  const isSoon=a=>!!a.deadline&&new Date(a.deadline)>=_today&&new Date(a.deadline)<=_soon30;
+  const expired=all.filter(a=>isExp(a));
+  const soon=all.filter(a=>isSoon(a));
 
   const q=search.toLowerCase();
   const bySorted=[...all].sort((a,b)=>{
     // Expired first, then by deadline asc, then by date
-    if(a.deadline_is_expired&&!b.deadline_is_expired) return -1;
-    if(!a.deadline_is_expired&&b.deadline_is_expired) return 1;
+    if(isExp(a)&&!isExp(b)) return -1;
+    if(!isExp(a)&&isExp(b)) return 1;
     const da=new Date(a.deadline||a.date||0), db=new Date(b.deadline||b.date||0);
     return da-db; // échéance la plus proche en premier
   });
-  const expired2=bySorted.filter(a=>a.deadline_is_expired);
-  const soon2=bySorted.filter(a=>!a.deadline_is_expired&&a.deadline_is_soon_expired);
+  const expired2=bySorted.filter(a=>isExp(a));
+  const soon2=bySorted.filter(a=>isSoon(a));
   const byFilter=filter==='expired'?expired2:filter==='soon'?soon2:bySorted;
   const filtered=q?byFilter.filter(a=>
     (a.corporation_client_name||'').toLowerCase().includes(q)||
@@ -1254,8 +1259,8 @@ function Activites({session, onEventClick, onCompanyClick}) {
     {filtered.length===0?<Empty icon={Activity} msg={q?"Aucun résultat.":"Aucune activité."}/>:
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {filtered.map((a,i)=>{
-          const isExp=a.deadline_is_expired;
-          const isSoon=a.deadline_is_soon_expired;
+          const isExp_a=isExp(a);
+          const isSoon_a=isSoon(a);
           const dot=isExp?T.danger:isSoon?T.warning:T.success;
           return <Card key={a.activity_id||i} style={{padding:14}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
@@ -1459,14 +1464,14 @@ function CompanyDetail({company, allCustomers, session, onBack}) {
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {relActivities.map((a,i)=><Card key={i} style={{padding:12}}>
             <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
-              <div style={{width:8,height:8,borderRadius:'50%',background:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.success,marginTop:5,flexShrink:0}}/>
+              <div style={{width:8,height:8,borderRadius:'50%',background:(()=>{const t=new Date();t.setHours(0,0,0,0);const s=new Date(t);s.setDate(s.getDate()+30);const exp=!!a.deadline&&new Date(a.deadline)<t;const son=!!a.deadline&&new Date(a.deadline)>=t&&new Date(a.deadline)<=s;return exp?T.danger:son?T.warning:T.success;})(),marginTop:5,flexShrink:0}}/>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:T.ink}}>{a.type||'Activité'} {a.category?`· ${a.category}`:''}</div>
                 {a.event_name&&<div style={{fontSize:12,color:T.textMuted,display:'flex',alignItems:'center',gap:4}}><Calendar size={11}/>{a.event_name}</div>}
                 {a.comment&&<div style={{fontSize:12,color:T.textMuted,marginTop:4,lineHeight:1.5,borderLeft:`2px solid ${T.border}`,paddingLeft:6}}>{strip(a.comment).slice(0,100)}{strip(a.comment).length>100?'…':''}</div>}
                 <div style={{fontSize:11,color:T.textSubtle,marginTop:4,display:'flex',gap:8,flexWrap:'wrap'}}>
                   {a.date&&<span><Clock size={10}/> {date(a.date)}</span>}
-                  {a.deadline&&<span style={{color:a.deadline_is_expired?T.danger:a.deadline_is_soon_expired?T.warning:T.textSubtle}}>{a.deadline_is_expired?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
+                  {a.deadline&&<span style={{color:(()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})() ?T.danger:T.textSubtle}}>{ (()=>{const t=new Date();t.setHours(0,0,0,0);return !!a.deadline&&new Date(a.deadline)<t;})()?'⚠ ':''}Échéance : {date(a.deadline)}</span>}
                 </div>
               </div>
             </div>
