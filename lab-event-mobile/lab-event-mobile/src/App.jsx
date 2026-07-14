@@ -34,7 +34,7 @@ function cacheKey(subdomain, path) {
   return `le_cache_${subdomain}_${path.replace(/[^a-z0-9]/gi,'_')}`;
 }
 // Endpoints volumineux → mémoire uniquement
-const BIG_PATHS = ['analytics_events','rentability','planning_by_day','partner_companies'];
+const BIG_PATHS = ['analytics_events','rentability','planning_by_day','partner_companies','finance_documents_quotes','finance_documents_bills','analytics_activity'];
 function isBig(key) { return BIG_PATHS.some(p => key.includes(p)); }
 
 function cacheGet(key) {
@@ -82,21 +82,35 @@ function cacheArr(key) {
 // Les événements ('analytics_events') sont dans BIG_PATHS : jamais persistés en localStorage,
 // seulement en mémoire (_memCache). Une recherche via Object.keys(localStorage) ne les trouvera
 // donc jamais. On utilise cacheGet() (mémoire d'abord) avec la clé exacte de l'endpoint events.
+// Lit un jeu de données mis en cache EN MÉMOIRE (_memCache, toujours à jour cette session)
+// plutôt qu'en localStorage brut. localStorage est plafonné à ~5 Mo par site : sur les gros
+// comptes (dizaines de milliers de lignes de devis/factures/activités), l'écriture peut
+// échouer silencieusement une fois le quota atteint, laissant une copie figée et périmée
+// (parfois de plusieurs jours). _memCache, lui, est réalimenté à chaque connexion/rechargement
+// via prefetchAll(), donc toujours à jour pour la session en cours.
+function memArr(key) {
+  const cached = cacheGet(key);
+  const raw = cached?.data;
+  return Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+}
+function eventsArr(session) { return session ? memArr(cacheKey(session.subdomain, '/v3/analytics/events')) : []; }
+function quotesArr(session) { return session ? memArr(cacheKey(session.subdomain, '/v3/analytics/finance-documents/quotes')) : []; }
+function billsArr(session) { return session ? memArr(cacheKey(session.subdomain, '/v3/analytics/finance-documents/bills')) : []; }
+function activityArr(session) { return session ? memArr(cacheKey(session.subdomain, '/v3/analytics/activity')) : []; }
+function paymentsArr(session) { return session ? memArr(cacheKey(session.subdomain, '/v3/analytics/bill-prepayments')) : []; }
+function companiesArr(session) { return session ? memArr(cacheKey(session.subdomain, 'allpages_/v3/customer-company')) : []; }
+function customersArr(session) { return session ? memArr(cacheKey(session.subdomain, 'allpages_/v3/customers')) : []; }
 function findEventByName(session, name) {
   if (!name || !session) return null;
   const n = String(name).toLowerCase().trim();
   if (!n) return null;
-  const arr = eventsArr(session);
-  return arr.find(e => (e.event_name||'').toLowerCase().trim() === n) || null;
+  return eventsArr(session).find(e => (e.event_name||'').toLowerCase().trim() === n) || null;
 }
-// Même logique que findEventByName mais renvoie le tableau complet (pour filtrer les
-// événements liés à une société/un contact dans leurs fiches détail respectives).
-function eventsArr(session) {
-  if (!session) return [];
-  const key = cacheKey(session.subdomain, '/v3/analytics/events');
-  const cached = cacheGet(key);
-  const raw = cached?.data;
-  return Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+function findCompanyByName(session, name) {
+  if (!name || !session) return null;
+  const n = String(name).toLowerCase().trim();
+  if (!n) return null;
+  return companiesArr(session).find(c => (c.name||'').toLowerCase().trim() === n) || null;
 }
 
 async function api(subdomain, token, path, { method='GET', body }={}) {
@@ -456,23 +470,20 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
   const code = String(event.incremental_code||'');
   const relatedQuotes = (() => {
     try {
-      const k = Object.keys(localStorage).find(k => k.includes('quotes'));
-      return k ? cacheArr(k).filter(q => String(q.incremental_code)===code) : [];
+      return quotesArr(session).filter(q => String(q.incremental_code)===code);
     } catch { return []; }
   })().sort((a,b) => new Date(b.date_of_quote||0) - new Date(a.date_of_quote||0));
 
   const relatedBills = (() => {
     try {
-      const k = Object.keys(localStorage).find(k => k.includes('bills'));
-      return k ? cacheArr(k).filter(b => String(b.incremental_code)===code) : [];
+      return billsArr(session).filter(b => String(b.incremental_code)===code);
     } catch { return []; }
   })().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
 
   const relatedPayments = (() => {
     try {
-      const k = Object.keys(localStorage).find(k => k.includes('prepayments'));
       const billIds = new Set(relatedBills.map(b => String(b.bill_id||b.id)));
-      return k ? cacheArr(k).filter(p => billIds.has(String(p.bill_id||''))) : [];
+      return paymentsArr(session).filter(p => billIds.has(String(p.bill_id||'')));
     } catch { return []; }
   })().sort((a,b) => new Date(b.prepayment_date||0) - new Date(a.prepayment_date||0));
 
@@ -483,11 +494,10 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
 
   const relatedActivities = (() => {
     try {
-      const k = Object.keys(localStorage).find(k => k.includes('activity'));
       const evName = (event.event_name||'').toLowerCase();
-      return k ? cacheArr(k)
+      return activityArr(session)
         .filter(a => (a.event_name||'').toLowerCase()===evName)
-        .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)) : [];
+        .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
     } catch { return []; }
   })();
 
@@ -555,7 +565,7 @@ function EventDetail({event, onBack, session, onCompanyClick}) {
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {(f.label==='Email'&&f.value&&f.value!=='null')?<a href={`mailto:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
           :(f.label==='Téléphone'&&f.value&&f.value!=='null')?<a href={`tel:${f.value}`} style={{fontSize:13,fontWeight:500,color:T.brand,textDecoration:'none'}}>{f.value}</a>
-          :f.label==='Société'?<button onClick={()=>{const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));const cos=k?cacheArr(k):[];const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());if(co&&onCompanyClick)onCompanyClick(co);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0}}>{safeStr(f.value)}</button>
+          :f.label==='Société'?<button onClick={()=>{const co=findCompanyByName(session,f.value);if(co&&onCompanyClick)onCompanyClick(co);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0}}>{safeStr(f.value)}</button>
           :<span style={{fontSize:13,fontWeight:500,color:T.ink,textAlign:'right'}}>{safeStr(f.value)}</span>}
         </div>)}
       </Card>
@@ -1018,9 +1028,7 @@ function QuoteDetail({quote:q, session, onBack, onEventClick, onCompanyClick}) {
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {f.label==='Client'&&onCompanyClick?<button onClick={()=>{
-            const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
-            const cos=k?cacheArr(k):[];
-            const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());
+            const co=findCompanyByName(session,f.value);
             if(co) onCompanyClick(co);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :f.label==='Événement'&&onEventClick?<button onClick={()=>{
@@ -1186,9 +1194,7 @@ function BillDetail({bill:b, session, onBack, onEventClick, onCompanyClick}) {
         {fields.map((f,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'11px 16px',borderBottom:i<fields.length-1?`1px solid ${T.border}`:'none',gap:12}}>
           <span style={{fontSize:13,color:T.textMuted,flexShrink:0}}>{f.label}</span>
           {f.label==='Client'&&onCompanyClick?<button onClick={()=>{
-            const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
-            const cos=k?cacheArr(k):[];
-            const co=cos.find(x=>(x.name||'').toLowerCase()===(f.value||'').toLowerCase());
+            const co=findCompanyByName(session,f.value);
             if(co) onCompanyClick(co);
           }} style={{background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:600,color:T.brand,padding:0,textAlign:'right'}}>{f.value}</button>
           :f.label==='Événement'&&onEventClick?<button onClick={()=>{
@@ -1403,9 +1409,7 @@ function Activites({session, onEventClick, onCompanyClick}) {
                     if(ev) onEventClick(ev); else if(a.event_link) window.open(a.event_link,'_blank');
                   }} style={{fontSize:11.5,color:T.brand,background:'none',textDecoration:'none',border:`1px solid ${T.brand}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir événement</button>}
                   {a.corporation_client_name&&onCompanyClick&&<button onClick={()=>{
-                    const k=Object.keys(localStorage).find(k=>k.includes('customer_company'));
-                    const cos=k?cacheArr(k):[];
-                    const co=cos.find(c=>(c.name||'').toLowerCase()===(a.corporation_client_name||'').toLowerCase());
+                    const co=findCompanyByName(session,a.corporation_client_name);
                     if(co) onCompanyClick(co); else if(a.corporation_client_link) window.open(a.corporation_client_link,'_blank');
                   }} style={{fontSize:11.5,color:T.secondary,background:'none',textDecoration:'none',border:`1px solid ${T.secondary}`,borderRadius:6,padding:'3px 8px',cursor:'pointer'}}>Voir client</button>}
                 </div>}
@@ -1464,18 +1468,15 @@ function CompanyDetail({company, allCustomers, session, onBack, onContactClick, 
   } catch{return [];} })();
 
   const relQuotes = (() => { try {
-    const k=Object.keys(localStorage).find(k=>k.includes('quotes'));
-    return k?cacheArr(k).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];
+    return quotesArr(session).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0));
   } catch{return [];} })();
 
   const relBills = (() => { try {
-    const k=Object.keys(localStorage).find(k=>k.includes('bills'));
-    return k?cacheArr(k).filter(b=>(b.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+    return billsArr(session).filter(b=>(b.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   } catch{return [];} })();
 
   const relActivities = (() => { try {
-    const k=Object.keys(localStorage).find(k=>k.includes('activity'));
-    return k?cacheArr(k).filter(a=>(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];
+    return activityArr(session).filter(a=>(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   } catch{return [];} })();
 
   const tabs=[
@@ -1730,8 +1731,7 @@ function CreateEventForm({session, onDone}) {
   // Load contacts from cache
   const allCustomers = (() => {
     try {
-      const k = Object.keys(localStorage).find(k => k.includes('allpages') && k.includes('customers'));
-      return k ? cacheArr(k) : [];
+      return customersArr(session);
     } catch { return []; }
   })();
   const filteredCustomers = customerSearch && !selectedCustomer
@@ -2010,8 +2010,10 @@ export default function App() {
       {path:'/v3/analytics/finance-documents/rentability', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
       {path:'/v3/analytics/finance-documents/vue-analytics-light', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
       {path:'/v3/analytics/goods', opts:{method:'POST',body:{}}},
-      {path:'/v3/analytics/events/vue-planning', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
-      {path:'/v3/analytics/events/vue-planning-by-day', opts:{method:'POST',body:{date_from:dateJ2Ans()}}},
+      // vue-planning et vue-planning-by-day ne sont PAS préchargés ici : les écrans qui les
+      // utilisent (Planning salles, Planning par jour, onglet Planning d'un événement) font
+      // leur propre fetch paginé à la demande. Les précharger ici ne servait à rien (jamais lu
+      // depuis le cache) et gaspillait du quota localStorage sur les gros comptes.
     ];
     endpoints.forEach(({path,opts})=>apiCached(s.subdomain,s.token,path,opts).catch(()=>{}));
     fetchAllPagesCached(s.subdomain,s.token,'/v3/customer-company').catch(()=>{});
@@ -2563,18 +2565,18 @@ function ArticleDetail({article: a, onBack}) {
     <div style={{padding:'20px 16px 32px'}}>
       {/* Prix cards */}
       {(a.price||a.sell_price)&&<div style={{display:'flex',gap:8,marginBottom:16}}>
-        {a.sell_price&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+        {a.sell_price?<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
           <div style={{fontSize:10.5,color:T.textMuted}}>Prix de vente HT</div>
           <div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(a.sell_price)}</div>
-        </div>}
-        {a.margin_rate&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+        </div>:null}
+        {a.margin_rate!=null?<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
           <div style={{fontSize:10.5,color:T.textMuted}}>Taux marge</div>
           <div style={{fontSize:14,fontWeight:700,color:T.success}}>{a.margin_rate}%</div>
-        </div>}
-        {a.vat_rate&&<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
+        </div>:null}
+        {a.vat_rate!=null?<div style={{flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'9px 12px',textAlign:'center'}}>
           <div style={{fontSize:10.5,color:T.textMuted}}>TVA</div>
           <div style={{fontSize:14,fontWeight:700,color:T.info}}>{a.vat_rate}%</div>
-        </div>}
+        </div>:null}
       </div>}
       <Card>
         {fields.map((f,i,arr)=><div key={i} style={{display:'flex',justifyContent:'space-between',padding:'11px 16px',borderBottom:i<arr.length-1?`1px solid ${T.border}`:'none',gap:12}}>
@@ -2631,17 +2633,17 @@ function Articles({session}) {
               <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
                 {a.section&&<Badge label={a.section} color={T.secondary}/>}
                 {a.unit&&<span style={{fontSize:11.5,color:T.textMuted}}>/ {a.unit}</span>}
-                {a.vat_rate&&<span style={{fontSize:11.5,color:T.textMuted}}>TVA {a.vat_rate}%</span>}
+                {a.vat_rate!=null?<span style={{fontSize:11.5,color:T.textMuted}}>TVA {a.vat_rate}%</span>:null}
               </div>
-              {(a.margin_rate||a.commission_rate)&&<div style={{display:'flex',gap:12,marginTop:6,fontSize:11.5}}>
-                {a.margin_rate&&<span style={{color:T.success}}>Marge {a.margin_rate}%</span>}
-                {a.commission_rate&&<span style={{color:T.info}}>Comm. {a.commission_rate}%</span>}
+              {(a.margin_rate!=null||a.commission_rate!=null)&&<div style={{display:'flex',gap:12,marginTop:6,fontSize:11.5}}>
+                {a.margin_rate!=null?<span style={{color:T.success}}>Marge {a.margin_rate}%</span>:null}
+                {a.commission_rate!=null?<span style={{color:T.info}}>Comm. {a.commission_rate}%</span>:null}
               </div>}
             </div>
             <div style={{textAlign:'right',flexShrink:0}}>
-              {a.sell_price&&<div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(a.sell_price)}</div>}
-              {a.price&&a.price!==a.sell_price&&<div style={{fontSize:11.5,color:T.textMuted}}>PU {money(a.price)}</div>}
-              {!a.sell_price&&!a.price&&a.without_price&&<span style={{fontSize:11.5,color:T.textMuted}}>Sur devis</span>}
+              {a.sell_price?<div style={{fontSize:14,fontWeight:700,color:T.brand}}>{money(a.sell_price)}</div>:null}
+              {a.price&&a.price!==a.sell_price?<div style={{fontSize:11.5,color:T.textMuted}}>PU {money(a.price)}</div>:null}
+              {!a.sell_price&&!a.price&&a.without_price?<span style={{fontSize:11.5,color:T.textMuted}}>Sur devis</span>:null}
             </div>
           </div>
         </Card>)}
@@ -2753,8 +2755,8 @@ function ContactDetail({contact: c, session, onBack, onCompanyClick, onEventClic
   const cName=[c.name,c.last_name].filter(Boolean).join(' ').toLowerCase();
 
   const relEvents=()=>{try{return eventsArr(session).filter(e=>(e.contact_name||'').toLowerCase().includes(cName)||(e.company_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.events_date_from||0)-new Date(a.events_date_from||0));}catch{return [];}};
-  const relQuotes=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('quotes'));return k?cacheArr(k).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0)):[];}catch{return [];}};
-  const relActivities=()=>{try{const k=Object.keys(localStorage).find(k=>k.includes('activity'));return k?cacheArr(k).filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)):[];}catch{return [];}};
+  const relQuotes=()=>{try{return quotesArr(session).filter(q=>(q.customer||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date_of_quote||0)-new Date(a.date_of_quote||0));}catch{return [];}};
+  const relActivities=()=>{try{return activityArr(session).filter(a=>(a.client_contact_name||'').toLowerCase().includes(cName)||(a.corporation_client_name||'').toLowerCase()===coName).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));}catch{return [];}};
 
   const evts=relEvents(); const quotes=relQuotes(); const acts=relActivities();
 
